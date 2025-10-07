@@ -1,0 +1,138 @@
+import math
+from dataclasses import dataclass, asdict
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+# ==============================================================================
+# 1. DEFINIZIONE DELLE CLASSI DI DOMINIO (INVARIATE)
+# ==============================================================================
+
+@dataclass
+class Categoria:
+    id: int
+    nome: str
+    aliquota_iva: float
+
+@dataclass
+class Prodotto:
+    id: int
+    nome: str
+    prezzo_lordo: float
+    categoria: Categoria
+
+@dataclass
+class VoceScontrino:
+    nome_prodotto: str
+    quantita: int
+    prezzo_totale: float
+
+@dataclass
+class Scontrino:
+    voci: list[VoceScontrino]
+    totale_iva: float
+    totale_complessivo: float
+
+# ==============================================================================
+# 2. DATABASE "IN-MEMORY" E LOGICA DI CALCOLO
+# ==============================================================================
+
+# Definiamo categorie e prodotti in memoria per semplicità.
+cat_alimentari = Categoria(id=1, nome="Alimentari", aliquota_iva=4.0)
+cat_medicinali = Categoria(id=2, nome="Medicinali", aliquota_iva=10.0)
+cat_altro = Categoria(id=3, nome="Altro", aliquota_iva=22.0)
+
+# Questo dizionario simula il nostro database di prodotti.
+prodotti_db = {
+    10: Prodotto(id=10, nome="Pane Casereccio", prezzo_lordo=2.41, categoria=cat_alimentari),
+    25: Prodotto(id=25, nome="Agenda 2024", prezzo_lordo=15.50, categoria=cat_altro),
+    55: Prodotto(id=55, nome="Oki (antidolorifico)", prezzo_lordo=4.99, categoria=cat_medicinali),
+    101: Prodotto(id=101, nome="Latte Intero 1L", prezzo_lordo=1.59, categoria=cat_alimentari),
+    203: Prodotto(id=203, nome="Termometro Digitale", prezzo_lordo=8.90, categoria=cat_medicinali),
+    304: Prodotto(id=304, nome="Shampoo Neutro", prezzo_lordo=3.80, categoria=cat_altro),
+    12: Prodotto(id=12, nome="Barretta Proteica", prezzo_lordo=1.99, categoria=cat_alimentari),
+}
+
+class CalcolatoreScontrino:
+    def _arrotonda_a_0_05(self, prezzo):
+        return math.floor(prezzo * 20) / 20.0
+
+    def calcola_prezzo_finale_singolo(self, prodotto: Prodotto):
+        prezzo_ivato = prodotto.prezzo_lordo * (1 + prodotto.categoria.aliquota_iva / 100)
+        prezzo_finale = self._arrotonda_a_0_05(prezzo_ivato)
+        if prezzo_finale < prodotto.prezzo_lordo:
+             raise ValueError(f"Errore di calcolo per {prodotto.nome}: il prezzo finale ({prezzo_finale}) è inferiore al lordo ({prodotto.prezzo_lordo}).")
+        return prezzo_finale
+
+    def genera_scontrino(self, carrello: list[dict]):
+        voci_scontrino = []
+        totale_complessivo = 0.0
+        totale_lordo_complessivo = 0.0
+
+        for item in carrello:
+            prodotto_id = item.get('prodotto_id')
+            quantita = item.get('quantita')
+            
+            prodotto = prodotti_db.get(prodotto_id)
+            if not prodotto:
+                raise ValueError(f"Prodotto con ID {prodotto_id} non trovato.")
+
+            prezzo_unitario_finale = self.calcola_prezzo_finale_singolo(prodotto)
+            prezzo_riga = round(prezzo_unitario_finale * quantita, 2)
+            
+            voci_scontrino.append(VoceScontrino(
+                nome_prodotto=prodotto.nome,
+                quantita=quantita,
+                prezzo_totale=prezzo_riga
+            ))
+            
+            totale_complessivo += prezzo_riga
+            totale_lordo_complessivo += prodotto.prezzo_lordo * quantita
+        
+        totale_iva = totale_complessivo - totale_lordo_complessivo
+        
+        return Scontrino(
+            voci=voci_scontrino,
+            totale_iva=totale_iva,
+            totale_complessivo=totale_complessivo
+        )
+
+# ==============================================================================
+# 3. CREAZIONE DEL SERVER API CON FLASK
+# ==============================================================================
+
+app = Flask(__name__)
+# CORS è FONDAMENTALE per permettere al frontend Svelte (su una porta diversa)
+# di comunicare con questo backend.
+CORS(app)
+
+calcolatore = CalcolatoreScontrino()
+
+# Qui definiamo la rotta '/api/scontrino' che accetta richieste POST.
+@app.route('/api/scontrino', methods=['POST'])
+def handle_scontrino():
+    """
+    Questo endpoint riceve il carrello dal frontend, calcola lo scontrino
+    e restituisce il risultato in formato JSON.
+    """
+    carrello_data = request.json
+    if not carrello_data:
+        return jsonify({"errore": "Corpo della richiesta vuoto"}), 400
+
+    try:
+        scontrino_calcolato = calcolatore.gera_scontrino(carrello_data)
+        # asdict converte l'oggetto Scontrino in un dizionario che può essere
+        # facilmente trasformato in JSON.
+        return jsonify(asdict(scontrino_calcolato))
+    except ValueError as e:
+        return jsonify({"errore": str(e)}), 400
+    except Exception as e:
+        # Per debug, è utile loggare l'errore completo
+        print(f"Errore non gestito: {e}")
+        return jsonify({"errore": "Errore interno del server"}), 500
+
+# Questo blocco fa partire il server quando eseguiamo lo script.
+if __name__ == '__main__':
+    print("Avvio del server Flask su http://127.0.0.1:5000")
+    # debug=True fa sì che il server si riavvii da solo quando modifichi il file.
+    app.run(debug=True)
+

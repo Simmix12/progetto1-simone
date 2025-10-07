@@ -1,0 +1,28 @@
+/* File: src/app.css (Versione Dark Mode) */
+
+:root {
+  /* --- Palette Colori Dark Mode --- */
+  --colore-sfondo-principale: #1a202c; /* Grafite Scuro */
+  --colore-sfondo-secondario: #2d3748; /* Grigio Notte (per card/navbar) */
+  --colore-testo: #edf2f7;             /* Bianco Sporco */
+  --colore-accento: #4299e1;            /* Blu Brillante */
+  --colore-bordi: #4a5568;              /* Grigio per bordi e linee */
+}
+
+/* --- Stili Globali --- */
+body {
+  margin: 0;
+  /* Impostiamo il font di base per il testo */
+  font-family: 'Lato', sans-serif;
+  background-color: var(--colore-sfondo-principale);
+  color: var(--colore-testo);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Impostiamo il font per i titoli */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', sans-serif;
+}
