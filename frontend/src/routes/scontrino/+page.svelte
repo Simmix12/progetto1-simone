@@ -129,15 +129,39 @@
         
         <!-- Bottoni Azioni (nascosti in stampa) -->
         <div class="actions">
-            <a href="/" class="action-btn secondary">Torna al Negozio</a>
-            <button on:click={stampaRicevuta} class="action-btn">Stampa</button>
-            <button on:click={scaricaComePDF} class="action-btn">Scarica PDF</button>
+            <a href="/" class="action-btn secondary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m15 18-6-6 6-6"/>
+                </svg>
+                Torna al Negozio
+            </a>
+            <button on:click={stampaRicevuta} class="action-btn print">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Stampa
+            </button>
+            <button on:click={scaricaComePDF} class="action-btn primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Scarica PDF
+            </button>
         </div>
 
     {:else if errore}
         <h1>Oops! Qualcosa è andato storto.</h1>
         <p class="errore">{errore}</p>
-        <a href="/carrello" class="action-btn secondary">Torna al Carrello</a>
+        <a href="/carrello" class="action-btn secondary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
+            Torna al Carrello
+        </a>
     {/if}
 </div>
 
@@ -166,11 +190,147 @@
     .complessivo { font-size: 1.2rem; }
     .complessivo strong { font-size: 1.3rem; color: var(--colore-accento); }
     
-    .actions { display: flex; justify-content: center; align-items: center; margin-top: 2.5rem; gap: 1rem; }
-    .action-btn { flex-grow: 1; text-align: center; padding: 0.8rem 1rem; text-decoration: none; }
-    .action-btn.secondary { background-color: var(--colore-bordi); }
-    .action-btn.secondary:hover { background-color: #4b5563; }
-    
+    /* --- NUOVI STILI PER I BOTTONI --- */
+    .actions {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 2.5rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.875rem 1.5rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-decoration: none;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        min-width: 140px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .action-btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.5s ease;
+    }
+
+    .action-btn:hover::before {
+        left: 100%;
+    }
+
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .action-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Bottone Primario (Scarica PDF) */
+    .action-btn.primary {
+        background: linear-gradient(135deg, var(--colore-accento), #3b82f6);
+        color: white;
+        border: 2px solid transparent;
+    }
+
+    .action-btn.primary:hover {
+        background: linear-gradient(135deg, #3b82f6, var(--colore-accento));
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+    }
+
+    /* Bottone Secondario (Torna al Negozio) */
+    .action-btn.secondary {
+        background: transparent;
+        color: var(--colore-testo-principale);
+        border: 2px solid var(--colore-bordi);
+        background-color: var(--colore-sfondo-principale);
+    }
+
+    .action-btn.secondary:hover {
+        background-color: var(--colore-bordi);
+        border-color: var(--colore-testo-secondario);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Bottone Stampa */
+    .action-btn.print {
+        background: linear-gradient(135deg, #6b7280, #9ca3af);
+        color: white;
+        border: 2px solid transparent;
+    }
+
+    .action-btn.print:hover {
+        background: linear-gradient(135deg, #9ca3af, #6b7280);
+        box-shadow: 0 6px 20px rgba(107, 114, 128, 0.3);
+    }
+
+    /* Icone */
+    .action-btn svg {
+        flex-shrink: 0;
+        transition: transform 0.3s ease;
+    }
+
+    .action-btn:hover svg {
+        transform: scale(1.1);
+    }
+
+    .action-btn.primary:hover svg {
+        animation: bounce 0.6s ease infinite alternate;
+    }
+
+    .action-btn.print:hover svg {
+        animation: shake 0.5s ease;
+    }
+
+    /* Animazioni */
+    @keyframes bounce {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-2px); }
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: rotate(0); }
+        25% { transform: rotate(-5deg); }
+        75% { transform: rotate(5deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+        .actions {
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .action-btn {
+            width: 100%;
+            max-width: 280px;
+            min-width: auto;
+        }
+
+        .contenitore-scontrino {
+            margin: 1rem;
+            padding: 1.5rem;
+        }
+    }
+
     .errore { color: #f87171; text-align: center; font-size: 1.1rem; }
     .messaggio-caricamento { text-align: center; font-size: 1.2rem; padding: 2rem; }
 
