@@ -121,8 +121,7 @@
     />
 {/if}
 
-<h1>Prodotti Disponibili</h1>
-
+<h1>Inizia la tua spesa</h1>
 {#if errore}
     <p class="errore">{errore}</p>
 {/if}
@@ -253,9 +252,7 @@
     }
 
     .filtri-sidebar {
-        position: sticky;
-        top: 20px;
-        max-height: calc(100vh - 40px);
+        /* Le proprietà 'position: sticky', 'top' e 'max-height' sono state rimosse */
         display: flex;
         flex-direction: column;
         background-color: var(--colore-sfondo-secondario);
@@ -278,11 +275,9 @@
         margin-bottom: 1.5rem;
     }
     
-    /* ========= NUOVA REGOLA CSS AGGIUNTA QUI ========= */
     .filtri-header h2 {
-        margin: 0; /* Annulla il margine di default che causa il taglio */
+        margin: 0;
     }
-    /* ================================================ */
 
     .reset-btn {
         background: none;
@@ -434,4 +429,4 @@
             grid-template-columns: 1fr;
         }
     }
-</style>
+</style>    

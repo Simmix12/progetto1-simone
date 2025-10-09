@@ -52,9 +52,18 @@
 
 {#if isCartEmpty}
     <Modal>
-        <h2>Il tuo carrello è vuoto!</h2>
-        <p>Sembra che tu non abbia ancora aggiunto nessun prodotto.</p>
-        <a href="/" class="torna-negozio-btn">Torna al Negozio</a>
+        <div class="empty-cart-container">
+            <div class="empty-cart-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="21" r="1"></circle>
+                    <circle cx="19" cy="21" r="1"></circle>
+                    <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path>
+                </svg>
+            </div>
+            <h2 class="empty-cart-title">Il tuo carrello è vuoto!</h2>
+            <p class="empty-cart-message">Sembra che tu non abbia ancora aggiunto nessun prodotto al carrello. Inizia a fare shopping per scoprire le nostre fantastiche offerte!</p>
+            <a href="/" class="torna-negozio-btn">Esplora il Negozio</a>
+        </div>
     </Modal>
 {/if}
 
@@ -117,6 +126,56 @@
     }
 
     .hidden { display: none; }
+
+    /* --- NUOVO STILE PER IL POP-UP CARRELLO VUOTO --- */
+    .empty-cart-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 2rem;
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .empty-cart-icon {
+        color: var(--colore-testo-secondario);
+        margin-bottom: 1.5rem;
+        opacity: 0.7;
+    }
+
+    .empty-cart-title {
+        font-size: 1.8rem;
+        color: var(--colore-testo-principale);
+        margin-bottom: 1rem;
+        font-weight: 600;
+    }
+
+    .empty-cart-message {
+        color: var(--colore-testo-secondario);
+        line-height: 1.6;
+        margin-bottom: 2rem;
+        font-size: 1.1rem;
+    }
+
+    .torna-negozio-btn {
+        display: inline-block;
+        padding: 0.75rem 2rem;
+        background-color: var(--colore-primario, #007bff);
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .torna-negozio-btn:hover {
+        background-color: var(--colore-primario-scuro, #0056b3);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+    }
 
     /* --- NUOVO STILE DEL LAYOUT --- */
     .carrello-layout {
@@ -213,7 +272,6 @@
 
     .totale { display: flex; justify-content: space-between; font-size: 1.2rem; margin-top: 1rem; }
     .pagamento { width: 100%; margin-top: 2rem; padding: 1rem; font-size: 1.2rem; }
-    .torna-negozio-btn { display: inline-block; margin-top: 1.5rem; padding: 0.75rem 1.5rem; font-weight: bold; text-decoration: none; border-radius: 8px; }
 
     /* RESPONSIVE PER MOBILE */
     @media (max-width: 900px) {
@@ -227,6 +285,17 @@
             flex-basis: 100%;
             order: -1; /* Sposta le info del prodotto in cima su mobile */
             margin-bottom: 0.5rem;
+        }
+        
+        /* Responsive per il pop-up carrello vuoto */
+        .empty-cart-container {
+            padding: 1.5rem;
+        }
+        .empty-cart-title {
+            font-size: 1.5rem;
+        }
+        .empty-cart-message {
+            font-size: 1rem;
         }
     }
 </style>

@@ -208,9 +208,9 @@
     
     .profile-dropdown ul li a,
     .profile-dropdown ul li button {
-        display: flex; /* USA FLEX PER ALLINEARE ICONA E TESTO */
+        display: flex;
         align-items: center;
-        gap: 0.75rem; /* Spazio tra icona e testo */
+        gap: 0.75rem;
         width: 100%;
         text-align: left;
         padding: 0.75rem 1rem;
@@ -221,7 +221,7 @@
         font-weight: 500;
         cursor: pointer;
         text-decoration: none;
-        border-radius: 6px; /* Bordi arrotondati per l'hover */
+        border-radius: 6px;
         transition: background-color 0.2s ease, color 0.2s ease;
     }
 
@@ -236,11 +236,21 @@
     }
 
     .profile-dropdown ul li:last-child button {
-        color: #f87171; /* Rosso chiaro per il logout */
+        color: #f87171;
     }
     
     .profile-dropdown ul li:last-child button:hover {
-        background-color: #ef4444; /* Rosso più scuro per l'hover */
+        background-color: #ef4444;
         color: white;
+    }
+
+    /* =======================================================
+       NUOVA REGOLA PER NASCONDERE LA NAVBAR DURANTE LA STAMPA
+       =======================================================
+    */
+    @media print {
+        .site-header {
+            display: none !important;
+        }
     }
 </style>
