@@ -57,4 +57,30 @@ Profilo utente
 
 Reimposta Password
 -
+- **Verifica password attuale**
+- **Controllo che le password nuove coincidano**
+
+Il Backend 
+-
+
+Il  **backend**  Si occupa di parlare con il database, gestire la logica complessa e rispondere a tutte le richieste che arrivano dal frontend.
+
+Gestione del Negozio️
+-
+**Catalogo Prodotti**: Il backend è il custode di tutti i nostri prodotti. Quando apri il negozio, è lui che invia al frontend la lista completa con nomi, prezzi e descrizioni. All'avvio, se il database è vuoto, lo riempie con una lista di prodotti predefiniti per avere subito qualcosa da mostrare.
+
+**Creazione dello Scontrino**: Quando un utente completa un acquisto, il backend riceve il contenuto del carrello. Si mette al lavoro per calcolare i prezzi finali con l'IVA corretta, arrotonda le cifre, calcola i totali e infine salva una copia dello scontrino nel database prima di restituire la versione finale al frontend per essere visualizzata.
+
+Utenti e Sicurezza
+-
+
+**Registrazione e Login**: Permette ai nuovi utenti di registrarsi, controllando che l'username o l'email non siano già stati presi. Le password non vengono mai salvate in chiaro, ma trasformate in un codice sicuro (hash) per proteggere la privacy.
+
+**Profilo Personale**: Ogni utente ha un suo profilo. Il backend permette di recuperare e aggiornare queste informazioni (nome, cognome, indirizzo).
+
+**Cambio Password**: Permette all'utente di cambiare la propria password
+
+L'Assistente Virtuale
+-
+integrato troviamo un assistente intelligente nella chat del sito, potenziato dall'IA di Google Gemini.
 
