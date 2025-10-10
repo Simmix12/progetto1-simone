@@ -27,3 +27,12 @@ Nella parte inferiore della pagina è presente un **Footer**(una inferiore) cont
 
 **Chat Widget** è un'icona  che permette all'utente di aprire una finestra, l'utente qui potrà chattare con um assistente ia.
 
+Pagina del negozio
+-
+- **Visualizzazione dei prodotti**: Prodotti vengono caricati dal backend e mostrati in una griglia
+- **sistema di filtri**
+  - *per categoria*
+  - *per mnome*
+- **Dettagli prodotto**: Se un prodotto viene cliccato si azpre una pagina con i dettagli del prodotto    
+- **Aggiunta al Carrello**: i prodotti possono essere aggiunti al carrello direttamente dalla griglia
+
