@@ -36,3 +36,25 @@ Pagina del negozio
 - **Dettagli prodotto**: Se un prodotto viene cliccato si azpre una pagina con i dettagli del prodotto    
 - **Aggiunta al Carrello**: i prodotti possono essere aggiunti al carrello direttamente dalla griglia
 
+Pagina Carrello
+-
+- **Lista prodotti**:mostra tutti gli articoli nel carrello con i dettagli
+- **Gestione quantità**:Aumentare e diminuire le quantità da comprare di ogni prodotto
+- **Riepilogo ordine**: Una colonna laterale fissa che mostra il totale provvisorio
+- **Metodo pagamento**: Sezione per selezionare il metodo di pagamento
+
+Pagina Pagamento
+-
+- **Dati fatturazione**: un form permette all'utente di inserire i propri dati anagrafici e l'indirizzo.
+- **Form pagamento dinamico**: in base al metodo di pagamento scelto il form cambia in maniera automatica
+- **Validazione dati**: I campi della carta di credito (numero, scadenza, CVC) vengono formattati e validati durante l'inserimento.
+
+
+Profilo utente
+-
+- **Gestione Dati**: Form per inserire e aggiornare dati anagrafici e indirizzo di spedizione.
+- **Geolocalizzazione**: Quando l'utente salva un indirizzo, il backend lo geolocalizza automaticamente e salva le coordinate, In caso si voglia sapere la posizione attuale del dispositivo basta cliccare il pulsante Gps per aggiornare le cordinate con quelle attuali
+
+Reimposta Password
+-
+
