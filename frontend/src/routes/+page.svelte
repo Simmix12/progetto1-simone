@@ -4,24 +4,50 @@
     import ProductDetailModal from '../components/ProductDetailModal.svelte';
     import { fly } from 'svelte/transition';
 
+    // Indirizzo base del nostro server API.
     const API_URL = 'http://127.0.0.1:5000';
 
-    let prodottiDisponibili = [];
-    let errore = '';
-    let cercaTermine = '';
-    let showSuggestions = false;
-    let selectedProduct = null;
+    // --- STATO DEL COMPONENTE ---
+    let prodottiDisponibili = []; // Lista completa dei prodotti caricati dal server.
+    let errore = ''; // Per mostrare un messaggio di errore se il caricamento fallisce.
+    let cercaTermine = ''; // Il testo inserito dall'utente nella barra di ricerca.
+    let categoriaSelezionata = 'Tutti'; // La categoria attualmente selezionata per filtrare.
+    let showSuggestions = false; // Controlla la visibilità del menu a tendina con i suggerimenti di ricerca.
+    let selectedProduct = null; // Il prodotto attualmente visualizzato nel modale di dettaglio.
 
+    // Stato per la notifica "toast" che appare quando si aggiunge un prodotto al carrello.
     let toastMessage = '';
-    let toastTimer;
+    let toastTimer; // Usato per far scomparire la notifica dopo qualche secondo.
 
+    // Dati statici per il componente.
     const categorieFisse = ['Alimentari', 'Medicinali', 'Altro'];
-    let categoriaSelezionata = 'Tutti';
+    const pubblicita = [
+        {
+            id: 1,
+            titolo: "Offerta Speciale -50%",
+            videoUrl: "https://www.youtube.com/embed/-htPoFiTXTA?si=sbiRbuV9wEuggese",
+            descrizione: "Scopri le nostre incredibili offerte"
+        },
+        {
+            id: 2,
+            titolo: "Nuovi Arrivi",
+            videoUrl: "https://www.youtube.com/embed/0KsEo_nPgmI?si=LeKNKfW7k13e-S5U",
+            descrizione: "I prodotti più recenti del mese"
+        },
+        {
+            id: 3,
+            titolo: "Migliori Acquisti",
+            videoUrl: "https://www.youtube.com/embed/D-FFmP6pqRQ?si=opS7qIbPXgfnRnWm",
+            descrizione: "I più venduti della settimana"
+        }
+    ];
 
-    // --- VARIABILI PER LA PAGINAZIONE ---
-    let currentPage = 1;
-    const itemsPerPage = 9;
+    // --- PAGINAZIONE ---
+    let currentPage = 1; // La pagina corrente visualizzata.
+    const itemsPerPage = 9; // Quanti prodotti mostrare per pagina.
 
+    // onMount viene eseguito appena il componente è pronto nel DOM.
+    // Lo usiamo per caricare i dati iniziali dei prodotti.
     onMount(async () => {
         try {
             const response = await fetch(`${API_URL}/api/prodotti`);
@@ -34,8 +60,13 @@
         }
     });
 
+    // --- LOGICA REATTIVA (si aggiorna automaticamente quando le variabili cambiano) ---
+
+    // Crea la lista completa delle categorie, aggiungendo "Tutti" a quelle fisse.
     $: categorieDisponibili = ['Tutti', ...categorieFisse];
 
+    // Filtra i prodotti in base alla categoria e al termine di ricerca.
+    // Questo blocco viene eseguito ogni volta che `prodottiDisponibili`, `categoriaSelezionata` o `cercaTermine` cambiano.
     $: prodottiFiltrati = prodottiDisponibili.filter((prodotto) => {
         const filtroCategoria =
             categoriaSelezionata === 'Tutti' || prodotto.categoria === categoriaSelezionata;
@@ -43,13 +74,31 @@
         return filtroCategoria && filtroNome;
     });
 
-    // --- LOGICA DI PAGINAZIONE ---
+    // Genera suggerimenti di ricerca basati su ciò che l'utente sta scrivendo.
+    $: suggerimenti =
+        cercaTermine.length > 0
+            ? prodottiDisponibili
+                  .filter((prodotto) =>
+                      prodotto.nome.toLowerCase().startsWith(cercaTermine.toLowerCase())
+                  )
+                  .slice(0, 5) // Mostriamo al massimo 5 suggerimenti.
+            : [];
+
+    // Ogni volta che l'utente cambia i filtri (ricerca o categoria),
+    // la paginazione viene resettata tornando alla prima pagina.
     $: (cercaTermine, categoriaSelezionata), (currentPage = 1);
+
+    // Calcola il numero totale di pagine necessarie.
     $: totalPages = Math.ceil(prodottiFiltrati.length / itemsPerPage);
+
+    // Estrae solo i prodotti per la pagina corrente dalla lista filtrata.
     $: paginatedProducts = prodottiFiltrati.slice(
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
+
+
+    // --- FUNZIONI ---
 
     function goToNextPage() {
         if (currentPage < totalPages) {
@@ -63,41 +112,40 @@
         }
     }
 
-    // --- FUNZIONE PER RESETTARE I FILTRI ---
+    // Riporta i filtri al loro stato iniziale.
     function resetFiltri() {
         cercaTermine = '';
         categoriaSelezionata = 'Tutti';
     }
 
-    $: suggerimenti =
-        cercaTermine.length > 0
-            ? prodottiDisponibili
-                  .filter((prodotto) =>
-                      prodotto.nome.toLowerCase().startsWith(cercaTermine.toLowerCase())
-                  )
-                  .slice(0, 5)
-            : [];
-
+    // Imposta il termine di ricerca quando l'utente clicca su un suggerimento.
     function selezionaSuggerimento(nomeProdotto) {
         cercaTermine = nomeProdotto;
-        showSuggestions = false;
+        showSuggestions = false; // Nasconde la lista dei suggerimenti.
     }
 
+    // Gestisce l'aggiunta di un prodotto al carrello.
     function aggiungiAlCarrello(prodotto) {
+        // Se il prodotto è già nel carrello, aumenta la quantità.
         if ($carrello[prodotto.id]) {
             $carrello[prodotto.id].quantita++;
         } else {
+            // Altrimenti, aggiungilo con quantità 1.
             $carrello[prodotto.id] = { ...prodotto, quantita: 1 };
         }
         
+        // Se il modale dei dettagli è aperto, chiudilo.
         if (selectedProduct) {
             selectedProduct = null;
         }
 
+        // Mostra una notifica di conferma.
         toastMessage = `"${prodotto.nome}" aggiunto al carrello!`;
         
+        // Resetta il timer precedente per evitare che la notifica si chiuda troppo presto.
         clearTimeout(toastTimer);
 
+        // Imposta un nuovo timer per nascondere la notifica dopo 3 secondi.
         toastTimer = setTimeout(() => {
             toastMessage = '';
         }, 3000);
@@ -113,6 +161,7 @@
         ✅ {toastMessage}
     </div>
 {/if}
+
 {#if selectedProduct}
     <ProductDetailModal
         prodotto={selectedProduct}
@@ -122,6 +171,7 @@
 {/if}
 
 <h1>Inizia la tua spesa</h1>
+
 {#if errore}
     <p class="errore">{errore}</p>
 {/if}
@@ -177,6 +227,29 @@
                         >
                             {categoria}
                         </button>
+                    {/each}
+                </div>
+            </div>
+
+            <div class="pubblicita-section">
+                <div class="pubblicita-header">
+                    <h3> Offerte Speciali</h3>
+                </div>
+                <div class="pubblicita-list">
+                    {#each pubblicita as spot (spot.id)}
+                        <div class="pubblicita-item">
+                            <h4>{spot.titolo}</h4>
+                            <p class="pubblicita-descrizione">{spot.descrizione}</p>
+                            <div class="video-container">
+                                <iframe
+                                    src="{spot.videoUrl}"
+                                    title="{spot.titolo}"
+                                    frameborder="0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowfullscreen
+                                ></iframe>
+                            </div>
+                        </div>
                     {/each}
                 </div>
             </div>
@@ -252,7 +325,6 @@
     }
 
     .filtri-sidebar {
-        /* Le proprietà 'position: sticky', 'top' e 'max-height' sono state rimosse */
         display: flex;
         flex-direction: column;
         background-color: var(--colore-sfondo-secondario);
@@ -370,6 +442,71 @@
         font-weight: bold;
     }
     
+    .pubblicita-section {
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--colore-bordi);
+    }
+    
+    .pubblicita-header {
+        margin-bottom: 1rem;
+    }
+    
+    .pubblicita-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: var(--colore-accento);
+    }
+    
+    .pubblicita-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .pubblicita-item {
+        background: var(--colore-sfondo-principale);
+        border-radius: 8px;
+        padding: 1rem;
+        border: 1px solid var(--colore-bordi);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .pubblicita-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .pubblicita-item h4 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1rem;
+        color: var(--colore-testo-principale);
+    }
+    
+    .pubblicita-descrizione {
+        font-size: 0.85rem;
+        color: var(--colore-testo-secondario);
+        margin-bottom: 0.75rem;
+    }
+    
+    .video-container {
+        position: relative;
+        width: 100%;
+        height: 0;
+        padding-bottom: 56.25%; /* Aspect ratio 16:9 */
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .video-container iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 4px;
+    }
+    
     .prodotti-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -429,4 +566,4 @@
             grid-template-columns: 1fr;
         }
     }
-</style>    
+</style>
