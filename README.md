@@ -84,3 +84,6 @@ L'Assistente Virtuale
 -
 integrato troviamo un assistente intelligente nella chat del sito, potenziato dall'IA di Google Gemini.
 
+Manuale d'utilizzo
+-
+[Manuale d'utilizzo](https://www.canva.com/design/DAG1YWKKiVA/TpYUXhbPexVUSnxIxfe0bA/edit?utm_content=DAG1YWKKiVA&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
