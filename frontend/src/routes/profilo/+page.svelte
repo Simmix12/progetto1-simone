@@ -2,7 +2,7 @@
     import { utente } from '../../stores.js';
     import { goto } from '$app/navigation';
     import { onMount, afterUpdate } from 'svelte';
-    import { browser } from '$app/environment'; // Necessario per eseguire il codice solo nel browser
+    import { browser } from '$app/environment';
 
     const API_URL = 'http://127.0.0.1:5000';
 
@@ -14,7 +14,9 @@
     let isLoading = true;
     let feedbackMessage = '';
     
-    // Variabili per la mappa
+    // NUOVA variabile per gli errori di validazione
+    let errors = {};
+
     let map = null; 
     let L = null;
 
@@ -42,37 +44,54 @@
         }
     });
 
-    // Questa funzione viene eseguita dopo che i dati del profilo sono stati caricati o aggiornati
     afterUpdate(async () => {
-        // Eseguiamo questo codice SOLO nel browser e se abbiamo le coordinate
         if (browser && profilo.lat && profilo.lon && document.getElementById('map')) {
-            // Carichiamo la libreria Leaflet solo la prima volta
             if (!L) {
                 L = (await import('leaflet')).default;
                 await import('leaflet/dist/leaflet.css');
             }
             
-            // Se la mappa non è ancora stata creata, la inizializziamo
             if (!map) {
-                map = L.map('map').setView([profilo.lat, profilo.lon], 17); // Zoom 17 per vista ravvicinata
-
-                // Aggiungiamo il layer con le immagini satellitari ("vista dall'alto")
+                map = L.map('map').setView([profilo.lat, profilo.lon], 17);
                 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                     attribution: 'Tiles &copy; Esri'
                 }).addTo(map);
-
-                // Aggiungiamo un segnaposto
                 L.marker([profilo.lat, profilo.lon]).addTo(map);
             } else {
-                // Se la mappa esiste già, la centriamo sulle nuove coordinate
                 map.setView([profilo.lat, profilo.lon], 17);
             }
         }
     });
+    
+    // --- NUOVA FUNZIONE DI VALIDAZIONE ---
+    function validateForm() {
+        const newErrors = {};
+        const requiredFields = ['nome', 'cognome', 'via', 'citta', 'cap', 'provincia'];
 
-    // Funzione per salvare i dati nel database (modificata per aggiornare la mappa)
+        requiredFields.forEach(field => {
+            if (!profilo[field] || !profilo[field].trim()) {
+                newErrors[field] = 'Questo campo è obbligatorio.';
+            }
+        });
+        
+        errors = newErrors;
+        return Object.keys(newErrors).length === 0; // Ritorna true se non ci sono errori
+    }
+
+    // --- FUNZIONE DI SALVATAGGIO MODIFICATA ---
     async function handleUpdate() {
         if (!$utente) return;
+        
+        // Pulisce i messaggi precedenti e valida il form
+        feedbackMessage = '';
+        const isFormValid = validateForm();
+
+        // Se il form non è valido, si ferma qui
+        if (!isFormValid) {
+            feedbackMessage = 'Errore: Compila tutti i campi obbligatori evidenziati.';
+            return;
+        }
+
         feedbackMessage = 'Salvataggio in corso...';
         try {
             const response = await fetch(`${API_URL}/api/profilo/${$utente.id}`, {
@@ -85,7 +104,6 @@
             
             feedbackMessage = data.messaggio;
             
-            // Aggiorniamo lo stato locale con i dati freschi dal backend (incluse le nuove coordinate)
             if (data.profilo) {
                 profilo = { 
                     ...profilo, ...data.profilo,
@@ -100,11 +118,9 @@
         }
     }
 
-    // Funzione per ottenere la geolocalizzazione dal browser (modificata per aggiornare la mappa)
     function handleGeolocate() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(position => {
-                // Aggiorniamo l'oggetto profilo in modo reattivo per far scattare afterUpdate
                 profilo = {
                     ...profilo,
                     lat: position.coords.latitude,
@@ -135,37 +151,58 @@
             <fieldset>
                 <legend>Dati Anagrafici</legend>
                 <div class="form-grid">
-                    <label> Nome <input type="text" bind:value={profilo.nome} placeholder="Mario" /> </label>
-                    <label> Cognome <input type="text" bind:value={profilo.cognome} placeholder="Rossi" /> </label>
+                    <div class="form-group">
+                        <label for="nome">Nome</label>
+                        <input id="nome" type="text" bind:value={profilo.nome} placeholder="Mario" class:invalid={errors.nome} />
+                        {#if errors.nome}<p class="error-message">{errors.nome}</p>{/if}
+                    </div>
+                    <div class="form-group">
+                        <label for="cognome">Cognome</label>
+                        <input id="cognome" type="text" bind:value={profilo.cognome} placeholder="Rossi" class:invalid={errors.cognome} />
+                        {#if errors.cognome}<p class="error-message">{errors.cognome}</p>{/if}
+                    </div>
                 </div>
             </fieldset>
 
             <fieldset>
                 <legend>Indirizzo di Spedizione</legend>
-                <label> Via e Numero Civico <input type="text" bind:value={profilo.via} placeholder="Via Roma, 10" /> </label>
+                 <div class="form-group">
+                    <label for="via">Via e Numero Civico</label>
+                    <input id="via" type="text" bind:value={profilo.via} placeholder="Via Roma, 10" class:invalid={errors.via} />
+                    {#if errors.via}<p class="error-message">{errors.via}</p>{/if}
+                 </div>
                 <div class="form-grid">
-                    <label> Città <input type="text" bind:value={profilo.citta} placeholder="Milano" /> </label>
-                    <label> CAP <input type="text" bind:value={profilo.cap} placeholder="20121" /> </label>
-                    <label> Provincia <input type="text" bind:value={profilo.provincia} placeholder="MI" maxlength="2" /> </label>
+                    <div class="form-group">
+                        <label for="citta">Città</label>
+                        <input id="citta" type="text" bind:value={profilo.citta} placeholder="Milano" class:invalid={errors.citta} />
+                        {#if errors.citta}<p class="error-message">{errors.citta}</p>{/if}
+                    </div>
+                    <div class="form-group">
+                        <label for="cap">CAP</label>
+                        <input id="cap" type="text" bind:value={profilo.cap} placeholder="20121" class:invalid={errors.cap} />
+                        {#if errors.cap}<p class="error-message">{errors.cap}</p>{/if}
+                    </div>
+                    <div class="form-group">
+                        <label for="provincia">Provincia</label>
+                        <input id="provincia" type="text" bind:value={profilo.provincia} placeholder="MI" maxlength="2" class:invalid={errors.provincia} />
+                        {#if errors.provincia}<p class="error-message">{errors.provincia}</p>{/if}
+                    </div>
                 </div>
             </fieldset>
 
             <fieldset>
                 <legend>La Tua Posizione</legend>
-                
-                <!-- Se abbiamo le coordinate, mostra la mappa -->
                 {#if profilo.lat && profilo.lon}
                     <p>Questa è la posizione associata al tuo indirizzo. Usa il GPS per una maggiore precisione.</p>
                     <div id="map" class="map-container"></div>
                 {:else}
                     <p>Salva il tuo indirizzo per visualizzare la tua posizione su una mappa.</p>
                 {/if}
-
                 <button type="button" class="secondary-btn" on:click={handleGeolocate}>Usa Posizione GPS</button>
             </fieldset>
 
             {#if feedbackMessage}
-                <p class="feedback">{feedbackMessage}</p>
+                <p class="feedback" class:error={feedbackMessage.startsWith('Errore:')}>{feedbackMessage}</p>
             {/if}
 
             <button type="submit">Salva Profilo</button>
@@ -180,13 +217,35 @@
     fieldset { border: 1px solid var(--colore-bordi); border-radius: 6px; padding: 1.5rem; }
     legend { padding: 0 0.5rem; font-weight: bold; color: var(--colore-accento); }
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
-    label { display: flex; flex-direction: column; font-weight: bold; font-size: 0.9rem; }
+    
+    /* MODIFICA: Separato il form-group per una migliore struttura */
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+    label { font-weight: bold; font-size: 0.9rem; }
     input { margin-top: 0.5rem; padding: 0.75rem; font-size: 1rem; border-radius: 5px; border: 1px solid var(--colore-bordi); background-color: var(--colore-sfondo-principale); color: var(--colore-testo); }
+    
+    /* --- NUOVI STILI PER LA VALIDAZIONE --- */
+    input.invalid {
+        border-color: #e53e3e; /* Rosso per errore */
+        box-shadow: 0 0 0 1px #e53e3e;
+    }
+    .error-message {
+        color: #e53e3e;
+        font-size: 0.8rem;
+        margin-top: 4px;
+        font-weight: normal;
+    }
+    .feedback.error {
+        color: #e53e3e;
+    }
+    /* --- FINE NUOVI STILI --- */
+
     button { padding: 0.8rem; font-size: 1.1rem; font-weight: bold; cursor: pointer; border-radius: 5px; background-color: var(--colore-accento); color: var(--colore-sfondo-principale); border: none; margin-top: 1rem; }
     .secondary-btn { background-color: var(--colore-bordi); color: var(--colore-testo); margin-top: 0; }
     .feedback { text-align: center; font-weight: bold; }
     
-    /* Stile per il contenitore della mappa */
     .map-container {
         height: 350px;
         width: 100%;
@@ -195,4 +254,3 @@
         margin-bottom: 1rem;
     }
 </style>
-
