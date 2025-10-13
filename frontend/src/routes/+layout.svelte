@@ -25,7 +25,6 @@
 
     <footer class="site-footer">
         <div class="footer-content">
-            <!-- Colonna Servizio Clienti -->
             <div class="footer-section">
                 <h3>Servizio Clienti</h3>
                 <div class="contact-info">
@@ -35,7 +34,14 @@
                 </div>
             </div>
 
-            <!-- Colonna Pagamenti Sicuri -->
+            <div class="footer-section">
+                <h3>Dove Siamo</h3>
+                <div class="address-info">
+                    <p>Via Repubblica, 10</p>
+                    <p>25121 Brescia (BS)</p>
+                    <p>Italia</p>
+                </div>
+            </div>
             <div class="footer-section">
                 <h3>Pagamenti Sicuri</h3>
                 <div class="payment-methods">
@@ -48,7 +54,6 @@
                 </div>
             </div>
 
-            <!-- Colonna Social -->
             <div class="footer-section">
                 <h3>Seguici</h3>
                 <div class="social-links">
@@ -66,10 +71,9 @@
             </div>
         </div>
 
-        <!-- Footer Bottom -->
         <div class="footer-bottom">
             <div class="footer-bottom-content">
-                <p>&copy; 2024 Il Tuo Negozio. Tutti i diritti riservati.</p>
+                <p>&copy; 2025 Buy Hub. Tutti i diritti riservati.</p>
             </div>
         </div>
     </footer>
@@ -111,7 +115,8 @@
         color: var(--colore-accento);
     }
 
-    .contact-info p {
+    .contact-info p,
+    .address-info p { /* <-- REGOLA AGGIUNTA QUI PER COERENZA */
         margin: 0.5rem 0;
         line-height: 1.5;
     }
@@ -234,8 +239,8 @@
     }
 
     /* =======================================================
-       NUOVA REGOLA PER NASCONDERE IL FOOTER DURANTE LA STAMPA
-       =======================================================
+        NUOVA REGOLA PER NASCONDERE IL FOOTER DURANTE LA STAMPA
+        =======================================================
     */
     @media print {
         .site-footer {
