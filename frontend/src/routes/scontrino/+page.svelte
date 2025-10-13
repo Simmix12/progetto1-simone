@@ -1,6 +1,7 @@
 <script>
     import { onMount } from 'svelte';
-    import { carrello } from '../../stores.js';
+    import { carrello, utente } from '../../stores.js'; // Aggiunto 'utente' per l'ID
+    import { goto } from '$app/navigation';
 
     const API_URL = 'http://127.0.0.1:5000';
     let scontrinoFinale = null;
@@ -9,38 +10,47 @@
 
     onMount(async () => {
         const carrelloCorrente = $carrello;
-        if (Object.keys(carrelloCorrente).length === 0) {
-            errore = "Operazione non valida: il carrello è già vuoto.";
+
+        // Protezione: se l'utente non è loggato o il carrello è vuoto, reindirizza
+        if (!$utente || Object.keys(carrelloCorrente).length === 0) {
+            errore = "Operazione non valida: utente non loggato o carrello vuoto.";
             isLoading = false;
+            // Opzionale: reindirizza dopo un breve ritardo
+            setTimeout(() => goto('/carrello'), 2000);
             return;
         }
 
-        const carrelloArray = Object.values(carrelloCorrente).map(item => ({
-            id: item.id,
-            nome: item.nome,
-            prezzo_lordo: item.prezzo_lordo,
-            categoria: item.categoria,
-            quantita: item.quantita
-        }));
+        const carrelloArray = Object.values(carrelloCorrente);
 
         try {
             const response = await fetch(`${API_URL}/api/scontrino`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(carrelloArray)
+                //
+                // --- CORREZIONE CHIAVE APPLICATA QUI ---
+                // Ora inviamo un oggetto JSON con le chiavi 'carrello' e 'userId'
+                // come si aspetta il backend Python.
+                //
+                body: JSON.stringify({
+                    carrello: carrelloArray,
+                    userId: $utente.id
+                })
             });
+            
             const data = await response.json();
-            if (!response.ok) throw new Error(data.errore || "Errore sconosciuto.");
+            if (!response.ok) {
+                throw new Error(data.errore || "Errore sconosciuto durante la creazione dello scontrino.");
+            }
+            
             scontrinoFinale = data;
-            $carrello = {}; // Svuota il carrello dopo aver generato lo scontrino
+            carrello.set({}); // Svuota il carrello DOPO aver ricevuto conferma
+
         } catch (e) {
             errore = e.message;
         } finally {
             isLoading = false;
         }
     });
-
-    // --- NUOVE FUNZIONI PER STAMPA E DOWNLOAD ---
 
     function stampaRicevuta() {
         window.print();
@@ -50,20 +60,17 @@
         const scontrinoElement = document.querySelector('.contenitore-scontrino');
         if (!scontrinoElement) return;
 
-        // Importiamo le librerie dinamicamente solo quando servono (lato client)
         const { default: jsPDF } = await import('jspdf');
         const { default: html2canvas } = await import('html2canvas');
 
         const canvas = await html2canvas(scontrinoElement, {
-            scale: 3, // Aumenta la scala per una migliore qualità
+            scale: 3,
             backgroundColor: '#ffffff',
-            // Rimuoviamo i controlli per evitare che appaiano nel PDF
             ignoreElements: (element) => element.classList.contains('actions'),
         });
         
         const imgData = canvas.toDataURL('image/png');
         
-        // Impostiamo dimensioni simili a uno scontrino termico (80mm di larghezza)
         const pdfWidth = 80; 
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
         const pdf = new jsPDF({
@@ -85,10 +92,8 @@
     {#if isLoading}
         <p class="messaggio-caricamento">Generazione dello scontrino in corso...</p>
     {:else if scontrinoFinale}
-        <!-- Questo titolo è visibile solo a schermo -->
         <h1 class="titolo-schermo">Grazie per il tuo acquisto!</h1>
         
-        <!-- Intestazione Scontrino (visibile sempre, ma stilizzata diversamente) -->
         <div class="receipt-header">
             <h2>Buy Hub</h2>
             <p>Via del Commercio, 123 - 25121 Brescia (BS)</p>
@@ -98,7 +103,6 @@
 
         <hr class="dashed"/>
 
-        <!-- Voci Scontrino -->
         <ul class="receipt-items">
             {#each scontrinoFinale.voci as voce}
                 <li class="receipt-item">
@@ -112,7 +116,6 @@
         
         <hr class="dashed"/>
 
-        <!-- Totali -->
         <div class="totali">
             <p><span>SUBTOTALE</span> <span>{(scontrinoFinale.totale_complessivo - scontrinoFinale.totale_iva).toFixed(2)} €</span></p>
             <p><span>TOTALE IVA</span> <span>{scontrinoFinale.totale_iva.toFixed(2)} €</span></p>
@@ -121,13 +124,11 @@
 
         <hr class="dashed"/>
 
-        <!-- Footer Scontrino -->
         <div class="receipt-footer">
             <p>Grazie per averci scelto!</p>
             <p>www.buyhub.it</p>
         </div>
         
-        <!-- Bottoni Azioni (nascosti in stampa) -->
         <div class="actions">
             <a href="/" class="action-btn secondary">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -166,7 +167,6 @@
 </div>
 
 <style>
-    /* --- STILI GENERALI (VISUALIZZAZIONE A SCHERMO) --- */
     .contenitore-scontrino { 
         max-width: 600px; 
         margin: 2rem auto; 
@@ -176,21 +176,56 @@
         border-radius: 12px; 
         font-family: 'Inter', sans-serif;
     }
-    .titolo-schermo { text-align: center; color: var(--colore-accento); margin-bottom: 2rem; }
-    h1, h2 { text-align: center; }
+    .titolo-schermo { 
+        text-align: center; 
+        color: var(--colore-accento); 
+        margin-bottom: 2rem; 
+    }
+    h1, h2 { 
+        text-align: center; 
+    }
     
-    .receipt-header h2 { margin: 0; color: var(--colore-testo); }
-    .receipt-header p, .receipt-footer p { margin: 0.25rem 0; font-size: 0.9em; color: var(--colore-testo-secondario); text-align: center; }
+    .receipt-header h2 { 
+        margin: 0; 
+        color: var(--colore-testo); 
+    }
+    .receipt-header p, .receipt-footer p { 
+        margin: 0.25rem 0; 
+        font-size: 0.9em; 
+        color: var(--colore-testo-secondario); 
+        text-align: center; 
+    }
 
-    ul { list-style: none; padding: 0; }
-    .receipt-item, .totali p { display: flex; justify-content: space-between; padding: 0.6rem 0; align-items: center;}
-    .item-info { display: flex; flex-direction: column; }
-    .item-qty-price { font-size: 1em; }
-    hr.dashed { border: none; border-top: 2px dashed var(--colore-bordi); margin: 1.5rem 0; }
-    .complessivo { font-size: 1.2rem; }
-    .complessivo strong { font-size: 1.3rem; color: var(--colore-accento); }
+    ul { 
+        list-style: none; 
+        padding: 0; 
+    }
+    .receipt-item, .totali p { 
+        display: flex; 
+        justify-content: space-between; 
+        padding: 0.6rem 0; 
+        align-items: center;
+    }
+    .item-info { 
+        display: flex; 
+        flex-direction: column; 
+    }
+    .item-qty-price { 
+        font-size: 1em; 
+    }
+    hr.dashed { 
+        border: none; 
+        border-top: 2px dashed var(--colore-bordi); 
+        margin: 1.5rem 0; 
+    }
+    .complessivo { 
+        font-size: 1.2rem; 
+    }
+    .complessivo strong { 
+        font-size: 1.3rem; 
+        color: var(--colore-accento); 
+    }
     
-    /* --- NUOVI STILI PER I BOTTONI --- */
     .actions {
         display: flex;
         justify-content: center;
@@ -244,7 +279,6 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
-    /* Bottone Primario (Scarica PDF) */
     .action-btn.primary {
         background: linear-gradient(135deg, var(--colore-accento), #3b82f6);
         color: white;
@@ -256,7 +290,6 @@
         box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
     }
 
-    /* Bottone Secondario (Torna al Negozio) */
     .action-btn.secondary {
         background: transparent;
         color: var(--colore-testo-principale);
@@ -270,7 +303,6 @@
         box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
     }
 
-    /* Bottone Stampa */
     .action-btn.print {
         background: linear-gradient(135deg, #6b7280, #9ca3af);
         color: white;
@@ -282,7 +314,6 @@
         box-shadow: 0 6px 20px rgba(107, 114, 128, 0.3);
     }
 
-    /* Icone */
     .action-btn svg {
         flex-shrink: 0;
         transition: transform 0.3s ease;
@@ -300,7 +331,6 @@
         animation: shake 0.5s ease;
     }
 
-    /* Animazioni */
     @keyframes bounce {
         0% { transform: translateY(0); }
         100% { transform: translateY(-2px); }
@@ -312,7 +342,6 @@
         75% { transform: rotate(5deg); }
     }
 
-    /* Responsive */
     @media (max-width: 640px) {
         .actions {
             flex-direction: column;
@@ -331,39 +360,80 @@
         }
     }
 
-    .errore { color: #f87171; text-align: center; font-size: 1.1rem; }
-    .messaggio-caricamento { text-align: center; font-size: 1.2rem; padding: 2rem; }
+    .errore { 
+        color: #f87171; 
+        text-align: center; 
+        font-size: 1.1rem; 
+    }
+    .messaggio-caricamento { 
+        text-align: center; 
+        font-size: 1.2rem; 
+        padding: 2rem; 
+    }
 
-    /* --- STILI PER LA STAMPA E IL PDF --- */
     @media print {
-        body * { visibility: hidden; }
-        .contenitore-scontrino, .contenitore-scontrino * { visibility: visible; }
-        .actions { display: none !important; } /* Nasconde i bottoni */
-        .titolo-schermo { display: none !important; }
+        body * { 
+            visibility: hidden; 
+        }
+        .contenitore-scontrino, .contenitore-scontrino * { 
+            visibility: visible; 
+        }
+        .actions, .titolo-schermo { 
+            display: none !important; 
+        }
 
         .contenitore-scontrino {
-            position: absolute; left: 0; top: 0;
-            margin: 0; padding: 15px;
-            width: 300px; /* Larghezza tipica (80mm) */
+            position: absolute; 
+            left: 0; 
+            top: 0;
+            margin: 0; 
+            padding: 15px;
+            width: 300px;
             border-radius: 0;
-            border: none; box-shadow: none;
+            border: none; 
+            box-shadow: none;
             background-color: white !important;
             color: black !important;
             font-family: 'Courier New', Courier, monospace !important;
             font-size: 12px;
         }
         
-        h2 { font-size: 1.2em; text-transform: uppercase; margin: 0 0 10px 0; }
-        .receipt-header p, .receipt-footer p { font-size: 0.9em; margin: 2px 0; color: black; }
+        h2 { 
+            font-size: 1.2em; 
+            text-transform: uppercase; 
+            margin: 0 0 10px 0; 
+        }
+        .receipt-header p, .receipt-footer p { 
+            font-size: 0.9em; 
+            margin: 2px 0; 
+            color: black; 
+        }
         
-        hr.dashed { border-top: 1px dashed black; margin: 10px 0; }
+        hr.dashed { 
+            border-top: 1px dashed black; 
+            margin: 10px 0; 
+        }
 
-        .receipt-items { font-size: 1em; }
-        .receipt-item, .totali p { padding: 3px 0; }
+        .receipt-items { 
+            font-size: 1em; 
+        }
+        .receipt-item, .totali p { 
+            padding: 3px 0; 
+        }
         
-        .totali { font-size: 1em; }
-        .complessivo, .complessivo strong { text-transform: uppercase; font-weight: bold; font-size: 1.1em; color: black; }
+        .totali { 
+            font-size: 1em; 
+        }
+        .complessivo, .complessivo strong { 
+            text-transform: uppercase; 
+            font-weight: bold; 
+            font-size: 1.1em; 
+            color: black; 
+        }
 
-        a { text-decoration: none; color: black; }
+        a { 
+            text-decoration: none; 
+            color: black; 
+        }
     }
 </style>

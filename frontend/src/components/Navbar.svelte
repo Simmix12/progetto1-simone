@@ -1,20 +1,16 @@
 <script>
     import { carrello, utente } from '../stores.js';
     import LoginModal from './LoginModal.svelte';
-    import { fly } from 'svelte/transition'; // Importato per le animazioni
+    import { fly } from 'svelte/transition';
 
-    // Calcoliamo il numero totale di articoli nel carrello per il badge
     $: numeroArticoli = Object.values($carrello).reduce((acc, item) => acc + item.quantita, 0);
 
-    // Stato per controllare la visibilità del popup di login
     let showLoginModal = false;
-
-    // Stato per controllare la visibilità del menu del profilo
     let showProfileMenu = false;
 
     function handleLogout() {
         $utente = null;
-        showProfileMenu = false; // Chiudi il menu dopo il logout
+        showProfileMenu = false;
     }
 </script>
 
@@ -25,7 +21,6 @@
 <header class="site-header">
     <nav class="navbar-content">
         <a href="/" class="logo-container" aria-label="Buy Hub Homepage">
-            <!-- NUOVO LOGO SVG -->
             <svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
                 <line x1="3" y1="6" x2="21" y2="6"/>
@@ -65,6 +60,13 @@
                                     <a href="/profilo">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                         <span>Gestisci Dati</span>
+                                    </a>
+                                </li>
+                                
+                                <li>
+                                    <a href="/profilo/ordini">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                        <span>I Miei Ordini</span>
                                     </a>
                                 </li>
                                 <li>
@@ -172,7 +174,6 @@
         border: 2px solid var(--colore-sfondo-secondario);
     }
 
-    /* --- STILI MENU A TENDINA MIGLIORATI --- */
     .profile-menu-container {
         position: relative;
     }
@@ -244,10 +245,6 @@
         color: white;
     }
 
-    /* =======================================================
-       NUOVA REGOLA PER NASCONDERE LA NAVBAR DURANTE LA STAMPA
-       =======================================================
-    */
     @media print {
         .site-header {
             display: none !important;

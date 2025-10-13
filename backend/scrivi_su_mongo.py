@@ -23,8 +23,8 @@ load_dotenv()
 # <-- FINE PARTE AGGIUNTA 2 -->
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+# Sostituisci la riga complessa con questa:
 CORS(app)
-
 USERNAME_DA_ATLAS = "simone_writer"
 PASSWORD_DA_ATLAS = "EMTBPD3eTXfhq6pp"
 HOST_DA_ATLAS = "cluster0.j5px3lo.mongodb.net"
@@ -78,6 +78,7 @@ class Scontrino:
     totale_iva: float
     totale_complessivo: float
     data_creazione: str
+    user_id: str
 
 
 # --- 3. LOGICA DI CALCOLO ---
@@ -90,10 +91,23 @@ class CalcolatoreScontrino:
         prezzo_ivato = prodotto.prezzo_lordo * (1 + aliquota / 100)
         return self._arrotonda_a_0_05(prezzo_ivato)
 
-    def genera_scontrino(self, carrello: list[dict]):
+    def genera_scontrino(self, carrello: list[dict], user_id: str):
+        """
+        Genera uno scontrino a partire da un carrello e lo associa a un utente.
+
+        Args:
+            carrello (list[dict]): The list of products in the cart.
+            user_id (str): The ID of the user making the purchase.
+
+        Returns:
+            Scontrino: The generated receipt object.
+        """
         voci_scontrino = []
         totale_complessivo = 0.0
         totale_lordo_complessivo = 0.0
+
+        if not carrello:
+            raise ValueError("Il carrello non può essere vuoto.")
 
         for item in carrello:
             quantita = item.get('quantita')
@@ -117,13 +131,23 @@ class CalcolatoreScontrino:
             totale_lordo_complessivo += prodotto.prezzo_lordo * quantita
 
         totale_iva = round(totale_complessivo - totale_lordo_complessivo, 2)
-        scontrino_generato = Scontrino(voci=voci_scontrino, totale_iva=totale_iva, totale_complessivo=round(totale_complessivo, 2), data_creazione=datetime.now().isoformat())
+        
+        # The user_id is now included when creating the receipt
+        scontrino_generato = Scontrino(
+            voci=voci_scontrino, 
+            totale_iva=totale_iva, 
+            totale_complessivo=round(totale_complessivo, 2), 
+            data_creazione=datetime.now().isoformat(),
+            user_id=user_id  # Associates the order with the user
+        )
 
         scontrino_dict = asdict(scontrino_generato)
         scontrini_collection.insert_one(scontrino_dict)
-        print(f"✅ Scontrino salvato su MongoDB con successo!")
+        
+        # The log message is now more specific
+        print(f"✅ Scontrino per l'utente {user_id} salvato su MongoDB con successo!")
+        
         return scontrino_generato
-
 
 # --- 4. ROTTE DELL'API ---
 calcolatore = CalcolatoreScontrino()
@@ -379,9 +403,18 @@ def change_password(user_id):
 
 @app.route('/api/scontrino', methods=['POST'])
 def handle_scontrino():
-    carrello_data = request.json
+    # Il frontend ora invia un oggetto JSON con due chiavi: "carrello" e "userId"
+    data = request.json
+    carrello_data = data.get('carrello')
+    user_id = data.get('userId')
+
+    # Controllo che entrambi i dati siano presenti
+    if not carrello_data or not user_id:
+        return jsonify({"errore": "Dati del carrello o ID utente mancanti."}), 400
+
     try:
-        scontrino_calcolato = calcolatore.genera_scontrino(carrello_data)
+        # Chiama la funzione aggiornata passando entrambi i parametri
+        scontrino_calcolato = calcolatore.genera_scontrino(carrello_data, user_id)
         return jsonify(asdict(scontrino_calcolato))
     except (ValueError, TypeError) as e:
         return jsonify({"errore": str(e)}), 400
@@ -459,6 +492,27 @@ def handle_chat():
     except Exception as e:
         print(f"❌ ERRORE durante la chiamata a Gemini o elaborazione: {e}")
         return jsonify({"error": "Errore nella comunicazione con l'assistente AI"}), 500
+
+# =======================================================
+# === NUOVA ROTTA PER OTTENERE LO STORICO DEGLI ORDINI ===
+# =======================================================
+@app.route('/api/ordini/<user_id>', methods=['GET'])
+def get_ordini_utente(user_id):
+    try:
+        # Cerca tutti gli scontrini che corrispondono allo user_id
+        ordini_cursor = scontrini_collection.find({"user_id": user_id}).sort("data_creazione", -1) # Ordina dal più recente
+        
+        ordini_list = []
+        for ordine in ordini_cursor:
+            # Converti l'ObjectId in una stringa per renderlo compatibile con JSON
+            ordine['_id'] = str(ordine['_id'])
+            ordini_list.append(ordine)
+            
+        return jsonify(ordini_list)
+
+    except Exception as e:
+        print(f"❌ Errore nel recupero degli ordini per l'utente {user_id}: {e}")
+        return jsonify({"errore": "Errore interno del server durante il recupero degli ordini."}), 500
 
 # --- 5. POPOLAMENTO INIZIALE ---
 

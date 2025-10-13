@@ -1,6 +1,5 @@
 <script>
-	// Questo componente non ha bisogno di logica JavaScript per questa implementazione,
-	// ma lo script tag è qui per future espansioni.
+	
 </script>
 
 <div class="modal-backdrop">
