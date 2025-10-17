@@ -1,32 +1,32 @@
 <script>
-    import { carrello } from '../../stores.js';
-    import { goto } from '$app/navigation';
-    import MetodoPagamento from '../../components/MetodoPagamento.svelte';
+    import { carrello } from '../../stores.js';//import dei prodotti del carrello
+    import { goto } from '$app/navigation';//funzione di sveltekit  per navigare tra le pagine
+    import MetodoPagamento from '../../components/MetodoPagamento.svelte';//componente importato per il metodo pagamento
     import Modal from '../../components/Modal.svelte';
 
     let carrelloItems = Object.values($carrello);
-    let metodoPagamentoScelto = '';
+    let metodoPagamentoScelto = '';//variabile per memorizzare il metodo pagamento
     
     // Le variabili reattive $: si aggiorneranno automaticamente quando $carrello cambia
-    $: isCartEmpty = carrelloItems.length === 0;
-    $: totaleCarrello = carrelloItems.reduce((acc, item) => acc + item.prezzo_lordo * item.quantita, 0);
-
+    $: isCartEmpty = carrelloItems.length === 0;//variabile che vede se il carrello è vuoto
+    $: totaleCarrello = carrelloItems.reduce((acc, item) => acc + item.prezzo_lordo * item.quantita, 0);//variabile che conta quanti oggetti ci sono nel carrello
+//acc accumulatore  //item oggettonel carrello 
     const API_URL = 'http://127.0.0.1:5000';
 
     function procediAlPagamento() {
-        if (!metodoPagamentoScelto) return;
-        goto(`/pagamento?metodo=${metodoPagamentoScelto}`);
+        if (!metodoPagamentoScelto) return;// se non sono stati scelti metodi di pagamento, viene bloccato
+        goto(`/pagamento?metodo=${metodoPagamentoScelto}`);//goto naviga sulla pagina di pagamento
     }
 
     // --- NUOVE FUNZIONI PER GESTIRE LA QUANTITÀ ---
     function incrementaQuantita(prodottoId) {
-        if ($carrello[prodottoId]) {
-            $carrello[prodottoId].quantita++;
+        if ($carrello[prodottoId]) {//verifica che il prodotto esista nel carrello
+            $carrello[prodottoId].quantita++; //+1 quantità
             $carrello = $carrello; // Forza l'aggiornamento
-            carrelloItems = Object.values($carrello);
+            carrelloItems = Object.values($carrello);//aggiornamento array 
         }
     }
-
+//funziona come quella sopra
     function decrementaQuantita(prodottoId) {
         if ($carrello[prodottoId]) {
             $carrello[prodottoId].quantita--;

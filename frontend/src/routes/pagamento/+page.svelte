@@ -1,11 +1,11 @@
 <script>
-    import { carrello, utente } from '../../stores.js';
+    import { carrello, utente } from '../../stores.js';//importazione carrello e prodotti dell'utente
     import { page } from '$app/stores';
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
 
     const API_URL = 'http://127.0.0.1:5000';
-
+//memorizzazione dati fatturazione utente
     let datiFatturazione = {
         nome: '',
         cognome: '',
@@ -15,18 +15,18 @@
         provincia: ''
     };
     
-    let isMobile = false;
-    let showRiepilogo = false;
+    let isMobile = false;//Flag per rilevare se l'utente sta usando un dispositivo mobile.
+    let showRiepilogo = false;//flag che controlla la visibilità del riepilogo ordine   
     
     onMount(async () => {
         checkMobile();
-        window.addEventListener('resize', checkMobile);
+        window.addEventListener('resize', checkMobile);//ridimensionamento per schermo mobile
         
         if ($utente) {
             try {
-                const response = await fetch(`${API_URL}/api/profilo/${$utente.id}`);
+                const response = await fetch(`${API_URL}/api/profilo/${$utente.id}`);//recupero profilo
                 if (response.ok) {
-                    const profilo = await response.json();
+                    const profilo = await response.json(); //popolazione campi
                     datiFatturazione = {
                         nome: profilo.nome || '',
                         cognome: profilo.cognome || '',
@@ -47,14 +47,14 @@
     });
 
     function checkMobile() {
-        isMobile = window.innerWidth <= 768;
+        isMobile = window.innerWidth <= 768; //se è mobile
     }
 
-    const metodoPagamento = $page.url.searchParams.get('metodo');
+    const metodoPagamento = $page.url.searchParams.get('metodo');// vado a recuperare i metodi di pagamento di prim
 
     const carrelloItems = Object.values($carrello);
     const totaleCarrello = carrelloItems.reduce(
-        (acc, item) => acc + item.prezzo_lordo * item.quantita,
+        (acc, item) => acc + item.prezzo_lordo * item.quantita,//vadp a calcolare ancora quanti oggetti ci sono nela carrello
         0
     );
 
@@ -62,16 +62,16 @@
     let errors = {}, validatedFields = {};
 
     function formatCardNumber(e) {
-        const value = e.target.value.replace(/\D/g, '');
-        cardNumber = (value.match(/.{1,4}/g) || []).join(' ').slice(0, 19);
+        const value = e.target.value.replace(/\D/g, '');//rimozione caratteri non numerici
+        cardNumber = (value.match(/.{1,4}/g) || []).join(' ').slice(0, 19); // va a dividere in gruppi di 4 cifre la stringa che scrivo
     }
 
-    function formatExpiryDate(e) {
+    function formatExpiryDate(e) {  // scrive 12/24 al posto di 1224
         const value = e.target.value.replace(/\D/g, '');
         expiryDate = value.length > 2 ? `${value.slice(0, 2)}/${value.slice(2, 4)}` : value;
     }
 
-    function validateField(fieldName) {
+    function validateField(fieldName) { //puisce errori nel campo corrente
         delete errors.generale;
         delete errors[fieldName];
         delete validatedFields[fieldName];
@@ -129,7 +129,7 @@
         validatedFields = { ...validatedFields };
     }
 
-    function validateAllFields() {
+    function validateAllFields() { 
         const billingFields = ['nome', 'cognome', 'via', 'citta', 'cap', 'provincia'];
         billingFields.forEach(field => validateField(field));
 
@@ -141,7 +141,7 @@
         return Object.keys(errors).length === 0;
     }
 
-    function confermaPagamento() {
+    function confermaPagamento() {//se è completa naviga nello scontrino
         if (!validateAllFields()) {
             errors.generale = "Per favore, correggi i campi evidenziati in rosso.";
             errors = { ...errors };
@@ -152,7 +152,7 @@
         goto('/scontrino');
     }
 
-    function confermaOrdineSemplice() {
+    function confermaOrdineSemplice() {//per altri metodi di pagamento va fatta la validazione semplice
         const billingFields = ['nome', 'cognome', 'via', 'citta', 'cap', 'provincia'];
         billingFields.forEach(field => validateField(field));
 

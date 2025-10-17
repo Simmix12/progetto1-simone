@@ -15,7 +15,7 @@
     onMount(async () => {
         // 1. Protezione della pagina (Route Guard)
         // Se l'utente non è loggato, viene reindirizzato alla pagina di login.
-        if (!$utente) {
+        if (!$utente) { 
             goto('/login');
             return;
         }
@@ -23,7 +23,7 @@
         try {
             // 2. Chiamata all'API del backend
             // Viene richiesto lo storico degli ordini per l'utente attualmente loggato.
-            const response = await fetch(`${API_URL}/api/ordini/${$utente.id}`);
+            const response = await fetch(`${API_URL}/api/ordini/${$utente.id}`);//$utente.id prende l'utente loggato
             
             // 3. Gestione degli errori della risposta
             // Se la risposta non è positiva (es. errore 404 o 500), viene generato un errore.

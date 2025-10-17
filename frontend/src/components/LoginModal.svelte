@@ -1,17 +1,19 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { utente } from '../stores.js';
+	import { utente } from '../stores.js';// Store Svelte per lo stato globale dell'utente
 	import Modal from './Modal.svelte';
 
 	const dispatch = createEventDispatcher();
-	const API_URL = 'http://127.0.0.1:5000';
+	const API_URL = 'http://127.0.0.1:5000';//URL base dell'API backend.
+
+
 
 	// Stati condivisi per entrambe le form
 	let username = '';
 	let password = '';
 	let errore = '';
-	let isLoading = false;
-    let isRegistering = false; // NUOVO: Stato per passare tra Accedi (false) e Registrati (true)
+	let isLoading = false;//Flag booleano che indica se è in corso una richiesta API.
+    let isRegistering = false; //  Stato per passare tra Accedi (false) e Registrati (true)
 
 	// Stati aggiuntivi solo per la registrazione
     let email = '';
@@ -20,7 +22,7 @@
 	// Funzione per il Login (esistente)
 	async function handleLogin() {
 		isLoading = true;
-		errore = '';
+		errore = ''; //reset di aventuali errori precedenti
 		try {
 			const response = await fetch(`${API_URL}/api/login`, {
 				method: 'POST',
@@ -28,14 +30,14 @@
 				body: JSON.stringify({ username, password })
 			});
 
-			const data = await response.json();
+			const data = await response.json(); //effettua una chiamata all'endpoint di login con le credenziali
 
 			if (!response.ok) {
 				throw new Error(data.errore || 'Credenziali non valide. Riprova.');
 			}
 
 			// Successo: aggiorna store e chiudi
-			$utente = data.utente;
+			$utente = data.utente; // se è avvenuto aggiorna(store) con i dati dell' utente
 			dispatch('close');
 		} catch (e) {
 			errore = e.message;
@@ -45,7 +47,7 @@
 	}
 
     // NUOVO: Funzione per la Registrazione
-    async function handleRegister() {
+    async function handleRegister() { //controlla che la pass e la conferma pass coincidano
         if (password !== confirmPassword) {
             errore = 'Le password non corrispondono.';
             return;
@@ -54,7 +56,7 @@
         isLoading = true;
         errore = '';
 
-        try {
+        try {//chiamata allì'endpoint di registrazione con tutti i dati richiesti   
             const response = await fetch(`${API_URL}/api/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -69,7 +71,7 @@
             }
 
             // Successo: l'utente viene registrato E loggato
-            $utente = data.utente;
+            $utente = data.utente;//backend restituisce già l'utente loggato    
             dispatch('close');
         } catch (e) {
             errore = e.message;

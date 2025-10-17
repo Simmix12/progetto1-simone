@@ -3,7 +3,7 @@
     import LoginModal from './LoginModal.svelte';
     import { fly } from 'svelte/transition';
 
-    $: numeroArticoli = Object.values($carrello).reduce((acc, item) => acc + item.quantita, 0);
+    $: numeroArticoli = Object.values($carrello).reduce((acc, item) => acc + item.quantita, 0);//Calcola in modo reattivo il numero di prodotti nel carrello
 
     let showLoginModal = false;
     let showProfileMenu = false;

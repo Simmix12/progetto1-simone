@@ -1,9 +1,11 @@
 <script>
-    import { createEventDispatcher, onMount } from 'svelte';
+    import { createEventDispatcher, onMount } from 'svelte';//onMount  ti permette di eseguire il codice appena viene crato il componente   
     import { fly } from 'svelte/transition';
 
-    const dispatch = createEventDispatcher();
-    const API_URL = 'http://127.0.0.1:5000';
+    const dispatch = createEventDispatcher(); //dispatcher è un metodo per permettere ad un componente figlio di comunicare con un genitorie
+    const API_URL = 'http://127.0.0.1:5000'; //Crea un'istanza del dispatcher di eventi per comunicare con i componenti padre.
+
+
 
     // Stato della chat
     let messages = [
@@ -17,7 +19,7 @@
     function scrollToBottom() {
         setTimeout(() => {
             if (messagesContainer) {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight; //Imposta la posizione di scroll verticale
             }
         }, 50);
     }
@@ -25,19 +27,21 @@
     onMount(scrollToBottom);
 
     async function handleSend() {
-        if (!userInput.trim()) return;
+        if (!userInput.trim()) return;//Controlla che l'input non sia vuoto o solo spazi bianchi.
 
-        const currentInput = userInput;
-        messages = [...messages, { id: Date.now(), text: currentInput, sender: 'user' }];
-        userInput = '';
+
+
+        const currentInput = userInput; //salva l'imput corrente prima di resettarlo
+        messages = [...messages, { id: Date.now(), text: currentInput, sender: 'user' }];//Aggiorna l'array dei messaggi
+        userInput = '';//messaggio utente
         scrollToBottom();
         isLoading = true;
 
         try {
-            const response = await fetch(`${API_URL}/api/chat`, {
+            const response = await fetch(`${API_URL}/api/chat`, {//chiamata ai
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: currentInput }),
+                headers: { 'Content-Type': 'application/json' },//specifica il fatto che srtiamo inviando in json
+                body: JSON.stringify({ message: currentInput }),//converte in stringa json
             });
 
             if (!response.ok) {

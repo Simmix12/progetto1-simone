@@ -2,7 +2,7 @@
     import { utente } from '../../stores.js';
     import { goto } from '$app/navigation';
     import { onMount, afterUpdate } from 'svelte';
-    import { browser } from '$app/environment';
+    import { browser } from '$app/environment';// indica che lo stor sta girando nel browser
 
     const API_URL = 'http://127.0.0.1:5000';
 
@@ -20,22 +20,22 @@
     let map = null; 
     let L = null;
 
-    onMount(async () => {
+    onMount(async () => {//se l'utente non  è registrato torna alla home
         if (!$utente) {
             goto('/');
             return;
         }
         try {
-            const response = await fetch(`${API_URL}/api/profilo/${$utente.id}`);
+            const response = await fetch(`${API_URL}/api/profilo/${$utente.id}`);//recupero dati profilo
             if (!response.ok) throw new Error("Profilo non trovato.");
             const data = await response.json();
             
-            profilo = { 
-                ...profilo, ...data, 
-                ...(data.indirizzo || {}), 
-                ...(data.geolocalizzazione || {}) 
+            profilo = { //dati
+                ...profilo, ...data, //aggiunge dati
+                ...(data.indirizzo || {}), //aggiunge indirizzo
+                ...(data.geolocalizzazione || {}) //aggiunge posiziione (coordinate)
             };
-            delete profilo.indirizzo;
+            delete profilo.indirizzo;//rimuove
             delete profilo.geolocalizzazione;
         } catch (error) {
             console.warn("Nessun profilo trovato, si parte da un form vuoto.");
@@ -44,19 +44,19 @@
         }
     });
 
-    afterUpdate(async () => {
+    afterUpdate(async () => {//se soddisfiamo questi campi
         if (browser && profilo.lat && profilo.lon && document.getElementById('map')) {
             if (!L) {
                 L = (await import('leaflet')).default;
                 await import('leaflet/dist/leaflet.css');
             }
-            
+            //creazione mappa
             if (!map) {
-                map = L.map('map').setView([profilo.lat, profilo.lon], 17);
-                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                map = L.map('map').setView([profilo.lat, profilo.lon], 17)//centramento (posizione)
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {//satellite
                     attribution: 'Tiles &copy; Esri'
                 }).addTo(map);
-                L.marker([profilo.lat, profilo.lon]).addTo(map);
+                L.marker([profilo.lat, profilo.lon]).addTo(map);//aggiunta marcatore sulla posizione
             } else {
                 map.setView([profilo.lat, profilo.lon], 17);
             }
@@ -65,10 +65,10 @@
     
     // --- NUOVA FUNZIONE DI VALIDAZIONE ---
     function validateForm() {
-        const newErrors = {};
+        const newErrors = {};//creazioen oggetto errore e ne inserisce i campi obbligatori
         const requiredFields = ['nome', 'cognome', 'via', 'citta', 'cap', 'provincia'];
 
-        requiredFields.forEach(field => {
+        requiredFields.forEach(field => {//verifica all' interno dei campi che non siano vuoti
             if (!profilo[field] || !profilo[field].trim()) {
                 newErrors[field] = 'Questo campo è obbligatorio.';
             }
@@ -94,7 +94,7 @@
 
         feedbackMessage = 'Salvataggio in corso...';
         try {
-            const response = await fetch(`${API_URL}/api/profilo/${$utente.id}`, {
+            const response = await fetch(`${API_URL}/api/profilo/${$utente.id}`, {//fatch che aggiorna il profilo
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(profilo)
@@ -102,9 +102,9 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.errore || 'Si è verificato un errore.');
             
-            feedbackMessage = data.messaggio;
+            feedbackMessage = data.messaggio;//messaggio di successo
             
-            if (data.profilo) {
+            if (data.profilo) {//aggiornamento profilo con i dati ritornati dals erver 
                 profilo = { 
                     ...profilo, ...data.profilo,
                     ...(data.profilo.indirizzo || {}), 

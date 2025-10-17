@@ -1,30 +1,27 @@
 import os
 import math
+import json
+from datetime import datetime
+from dataclasses import dataclass, asdict
+from typing import List, Dict, Optional
+
+import urllib.parse
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
 from bson import ObjectId
-import urllib.parse
-from dataclasses import dataclass, asdict
-from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
-import json
-
-# <-- PARTE AGGIUNTA 1: Import per Gemini e gestione .env file -->
 import google.generativeai as genai
-from dotenv import load_dotenv
-# <-- FINE PARTE AGGINTA 1 -->
 
-# --- 1. CONFIGURAZIONE ---
-
-# <-- PARTE AGGIUNTA 2: Carica le variabili dal file .env -->
+# --- CONFIGURAZIONE ---
 load_dotenv()
-# <-- FINE PARTE AGGIUNTA 2 -->
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-# Sostituisci la riga complessa con questa:
 CORS(app)
+
+# Configurazione MongoDB
 USERNAME_DA_ATLAS = "simone_writer"
 PASSWORD_DA_ATLAS = "EMTBPD3eTXfhq6pp"
 HOST_DA_ATLAS = "cluster0.j5px3lo.mongodb.net"
@@ -43,45 +40,49 @@ db = client['db1']
 prodotti_collection = db['prodotti']
 scontrini_collection = db['scontrini']
 utenti_collection = db['utenti']
-newsletter_collection = db['newsletter']  # <-- NUOVA COLLECTION
+newsletter_collection = db['newsletter']
 
-# <-- PARTE AGGIUNTA 3: Configurazione del modello AI Gemini -->
+# Configurazione Gemini AI
 try:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     if not GEMINI_API_KEY:
         raise ValueError("Chiave API di Gemini non trovata. Assicurati di aver creato un file .env")
 
     genai.configure(api_key=GEMINI_API_KEY)
-    # --- MODIFICA: Utilizzo del modello 'gemini-1.5-flash' ---
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    print("✅ Modello AI Gemini (1.5 Flash) configurato con successo!")
+    # CORREZIONE: Utilizzo del modello corretto tra quelli disponibili
+    model = genai.GenerativeModel('models/gemini-2.0-flash')
+    print("✅ Modello AI Gemini (2.0 Flash) configurato con successo!")
 except Exception as e:
     print(f"❌ ERRORE di configurazione Gemini: {e}")
     exit()
 
-# --- 2. MODELLI ---
-ALIQUOTE_IVA = { "Alimentari": 4.0, "Medicinali": 10.0, "Altro": 22.0 }
+# --- MODELLI ---
+ALIQUOTE_IVA = {"Alimentari": 4.0, "Medicinali": 10.0, "Altro": 22.0}
+
 @dataclass
 class Prodotto:
     id: str
     nome: str
     prezzo_lordo: float
     categoria: str
+    immagine_url: str = ""
+    descrizione: str = ""
+
 @dataclass
 class VoceScontrino:
     nome_prodotto: str
     quantita: int
     prezzo_totale: float
+
 @dataclass
 class Scontrino:
-    voci: list[VoceScontrino]
+    voci: List[VoceScontrino]
     totale_iva: float
     totale_complessivo: float
     data_creazione: str
     user_id: str
 
-
-# --- 3. LOGICA DI CALCOLO ---
+# --- LOGICA DI CALCOLO ---
 class CalcolatoreScontrino:
     def _arrotonda_a_0_05(self, prezzo):
         return math.floor(prezzo * 20) / 20.0
@@ -91,21 +92,12 @@ class CalcolatoreScontrino:
         prezzo_ivato = prodotto.prezzo_lordo * (1 + aliquota / 100)
         return self._arrotonda_a_0_05(prezzo_ivato)
 
-    def genera_scontrino(self, carrello: list[dict], user_id: str):
-        """
-        Genera uno scontrino a partire da un carrello e lo associa a un utente.
-
-        Args:
-            carrello (list[dict]): The list of products in the cart.
-            user_id (str): The ID of the user making the purchase.
-
-        Returns:
-            Scontrino: The generated receipt object.
-        """
+    def genera_scontrino(self, carrello: List[dict], user_id: str):
+        #inizializzazione variabili
         voci_scontrino = []
         totale_complessivo = 0.0
         totale_lordo_complessivo = 0.0
-
+        #controllo che il carrello non sia vuoto
         if not carrello:
             raise ValueError("Il carrello non può essere vuoto.")
 
@@ -114,90 +106,48 @@ class CalcolatoreScontrino:
 
             if not all(k in item for k in ['id', 'nome', 'prezzo_lordo', 'categoria', 'quantita']):
                 raise ValueError("Dati del prodotto incompleti nel carrello.")
-
+            #verifica che i campi siano presenti
             prodotto = Prodotto(
                 id=item.get('id'),
                 nome=item.get('nome'),
                 prezzo_lordo=item.get('prezzo_lordo'),
                 categoria=item.get('categoria')
             )
-
+            #creazione oggetto prodotto partendo dai dati che ci sono nel carrello
             prezzo_unitario_finale = self.calcola_prezzo_finale_singolo(prodotto)
             prezzo_riga = round(prezzo_unitario_finale * quantita, 2)
 
-            voci_scontrino.append(VoceScontrino(nome_prodotto=prodotto.nome, quantita=quantita, prezzo_totale=prezzo_riga))
+            voci_scontrino.append(VoceScontrino(
+                nome_prodotto=prodotto.nome, 
+                quantita=quantita, 
+                prezzo_totale=prezzo_riga
+            ))
 
             totale_complessivo += prezzo_riga
             totale_lordo_complessivo += prodotto.prezzo_lordo * quantita
 
         totale_iva = round(totale_complessivo - totale_lordo_complessivo, 2)
-        
-        # The user_id is now included when creating the receipt
+          # creazione oggetto scontrino finale  
         scontrino_generato = Scontrino(
-            voci=voci_scontrino, 
-            totale_iva=totale_iva, 
-            totale_complessivo=round(totale_complessivo, 2), 
+            voci=voci_scontrino,
+            totale_iva=totale_iva,
+            totale_complessivo=round(totale_complessivo, 2),
             data_creazione=datetime.now().isoformat(),
-            user_id=user_id  # Associates the order with the user
+            user_id=user_id
         )
 
         scontrino_dict = asdict(scontrino_generato)
         scontrini_collection.insert_one(scontrino_dict)
         
-        # The log message is now more specific
         print(f"✅ Scontrino per l'utente {user_id} salvato su MongoDB con successo!")
-        
         return scontrino_generato
 
-# --- 4. ROTTE DELL'API ---
+# --- ROTTE API ---
+#instanzia calcolatore  
 calcolatore = CalcolatoreScontrino()
 
-# === NUOVA ROTTA PER LA NEWSLETTER ===
-@app.route('/api/newsletter/subscribe', methods=['POST'])
-def subscribe_newsletter():
-    try:
-        data = request.json
-        if not data or 'email' not in data:
-            return jsonify({"error": "Email richiesta"}), 400
-
-        email = data['email'].strip().lower()
-        source = data.get('source', 'website_footer')
-
-        # Validazione email
-        import re
-        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_regex, email):
-            return jsonify({"error": "Indirizzo email non valido"}), 400
-
-        # Controlla se l'email è già registrata
-        existing_subscriber = newsletter_collection.find_one({"email": email})
-        if existing_subscriber:
-            return jsonify({"error": "Questa email è già iscritta alla newsletter"}), 409
-
-        # Salva il nuovo iscritto
-        new_subscriber = {
-            "email": email,
-            "source": source,
-            "subscription_date": datetime.now(),
-            "active": True,
-            "ip_address": request.remote_addr
-        }
-
-        result = newsletter_collection.insert_one(new_subscriber)
-
-        print(f"✅ Nuova iscrizione newsletter: {email}")
-
-        return jsonify({
-            "success": True,
-            "message": "Iscrizione alla newsletter completata con successo!",
-            "subscriber_id": str(result.inserted_id)
-        }), 201
-
-    except Exception as e:
-        print(f"❌ Errore durante l'iscrizione alla newsletter: {e}")
-        return jsonify({"error": "Errore interno del server durante l'iscrizione"}), 500
-
 @app.route('/api/prodotti', methods=['GET'])
+#prende tutti i prodotti da mongo e converte id prodotto  in stringa
 def get_prodotti():
     prodotti_list = []
     for p in prodotti_collection.find({}):
@@ -217,6 +167,7 @@ def add_prodotto():
     if not data or 'nome' not in data or 'prezzo_lordo' not in data:
         return jsonify({"errore": "Dati mancanti."}), 400
     try:
+        #creazione nuovo prodotto
         nuovo_prodotto = {
             "nome": data["nome"],
             "prezzo_lordo": float(data["prezzo_lordo"]),
@@ -224,6 +175,7 @@ def add_prodotto():
             "immagine_url": data.get("immagine_url", ""),
             "descrizione": data.get("descrizione", "")
         }
+        #inserimento nuovo prodotto in mongo
         result = prodotti_collection.insert_one(nuovo_prodotto)
         nuovo_prodotto["id"] = str(result.inserted_id)
         return jsonify({
@@ -239,6 +191,7 @@ def add_prodotto():
 
 @app.route('/api/register', methods=['POST'])
 def registra_utente():
+    #verifica dati obbligatori utente per la registrazione
     data = request.json
     if not data or 'username' not in data or 'password' not in data or 'email' not in data:
         return jsonify({"errore": "Username, email e password sono richiesti."}), 400
@@ -252,8 +205,10 @@ def registra_utente():
 
     if utenti_collection.find_one({"email": email}):
         return jsonify({"errore": f"L'email '{email}' è già in uso."}), 409
-
+    #controllo se username e email esistono già
     try:
+        #creazione hash della pass e creazione utente (poi andranno inserite nel database)
+
         password_hash = generate_password_hash(password, method='pbkdf2:sha256')
         nuovo_utente = {
             "username": username,
@@ -275,6 +230,7 @@ def registra_utente():
         return jsonify({"errore": "Errore interno durante la creazione dell'account."}), 500
 
 @app.route('/api/login', methods=['POST'])
+#ricerca dati (username o pass nel database)
 def login_utente():
     data = request.json
     if not data or 'username' not in data or 'password' not in data:
@@ -283,7 +239,7 @@ def login_utente():
     username = data.get('username')
     password = data.get('password')
     utente_db = utenti_collection.find_one({"username": username})
-
+#verifica password con hash
     if utente_db and check_password_hash(utente_db['password_hash'], password):
         return jsonify({
             "messaggio": "Login effettuato con successo!",
@@ -297,6 +253,7 @@ def login_utente():
         return jsonify({"errore": "Credenziali non valide. Riprova o crea un account."}), 401
 
 @app.route('/api/profilo/<user_id>', methods=['GET'])
+#recupero dati del profilo utente
 def get_profilo(user_id):
     try:
         utente = utenti_collection.find_one({"_id": ObjectId(user_id)})
@@ -312,6 +269,7 @@ def get_profilo(user_id):
 @app.route('/api/profilo/<user_id>', methods=['PUT'])
 def update_profilo(user_id):
     try:
+        #recupero dati profilo
         data = request.json
         if not data:
             return jsonify({"errore": "Nessun dato fornito per l'aggiornamento."}), 400
@@ -323,20 +281,22 @@ def update_profilo(user_id):
             "cap": "profilo.indirizzo.cap", "provincia": "profilo.indirizzo.provincia",
             "lat": "profilo.geolocalizzazione.lat", "lon": "profilo.geolocalizzazione.lon"
         }
+        #analizza coppie di chiavi, dati-valore, poi controlla se le chiavi dei dati in arrivo sono presenti nei campi permessi, se è pressente viene accettato, altrimenti  no
         for key, value in data.items():
             if key in campi_permessi:
                 update_fields[campi_permessi[key]] = value
 
         if not update_fields:
             return jsonify({"errore": "Nessun campo valido fornito per l'aggiornamento."}), 400
-
+        #qua fa la stessa identica cosa, solamente che lo fa con l'indirizzo
         if any(k in data for k in ["via", "citta", "cap", "provincia"]):
             indirizzo_completo = f"{data.get('via', '')}, {data.get('citta', '')}, {data.get('cap', '')}, {data.get('provincia', '')}"
 
             nominatim_url = "https://nominatim.openstreetmap.org/search"
             params = {'q': indirizzo_completo, 'format': 'json'}
             headers = {'User-Agent': 'MioEcommerceApp/1.0 (mioemail@example.com)'}
-
+            #se l'indirizzo è presente allora prepara la chiamata a nominatim (openstreetmap)  
+            #aggiornamento campi trovati    
             try:
                 response = requests.get(nominatim_url, params=params, headers=headers)
                 response.raise_for_status()
@@ -374,6 +334,7 @@ def update_profilo(user_id):
 @app.route('/api/profilo/<user_id>/change-password', methods=['PUT'])
 def change_password(user_id):
     try:
+        #verifica della password attuale
         data = request.json
         current_password = data.get('current_password')
         new_password = data.get('new_password')
@@ -387,9 +348,9 @@ def change_password(user_id):
 
         if not check_password_hash(utente['password_hash'], current_password):
             return jsonify({"errore": "La password attuale non è corretta."}), 403
-
+        #aggiornamento con la nuova pass criptata  
         new_password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
-
+        #agiornamento nel database con i nuovi dati
         utenti_collection.update_one(
             {"_id": ObjectId(user_id)},
             {"$set": {"password_hash": new_password_hash}}
@@ -403,17 +364,15 @@ def change_password(user_id):
 
 @app.route('/api/scontrino', methods=['POST'])
 def handle_scontrino():
-    # Il frontend ora invia un oggetto JSON con due chiavi: "carrello" e "userId"
+    #generazione scontrino e  salvataggio dei dati scontrino corrispondenti all'utente
     data = request.json
     carrello_data = data.get('carrello')
     user_id = data.get('userId')
 
-    # Controllo che entrambi i dati siano presenti
     if not carrello_data or not user_id:
         return jsonify({"errore": "Dati del carrello o ID utente mancanti."}), 400
 
     try:
-        # Chiama la funzione aggiornata passando entrambi i parametri
         scontrino_calcolato = calcolatore.genera_scontrino(carrello_data, user_id)
         return jsonify(asdict(scontrino_calcolato))
     except (ValueError, TypeError) as e:
@@ -423,6 +382,7 @@ def handle_scontrino():
         return jsonify({"errore": "Errore interno del server"}), 500
 
 @app.route('/api/chat', methods=['POST'])
+#gestione dei dati della chat
 def handle_chat():
     data = request.json
     if not data or 'message' not in data:
@@ -432,6 +392,7 @@ def handle_chat():
     ai_response = "Spiacente, si è verificato un errore."
 
     try:
+        #prompt per l'analisi della richiesta dell' utente
         intent_prompt = f"""
         Analizza la richiesta dell'utente e classificala. Rispondi SOLO con un oggetto JSON.
         Le intenzioni possibili sono: "cerca_prodotto", "elenca_categoria", "info_generica".
@@ -443,34 +404,38 @@ def handle_chat():
         - "ciao come stai?" -> {{"intenzione": "info_generica"}}
         Richiesta utente: "{user_message}"
         """
-
+        #chiamata a gemini
         intent_response = model.generate_content(intent_prompt)
+        #pulizia della rispsota (rimozione parole prompt)
         intent_json_str = intent_response.text.strip().replace("```json", "").replace("```", "")
+        #passaggio da json a un formato che sia leggibile
         intent_data = json.loads(intent_json_str)
 
+        #se l'utente cerca un prodotto, viene interrogato il database
         intenzione = intent_data.get("intenzione")
 
         context_data = ""
         if intenzione == "cerca_prodotto" and "nome" in intent_data:
             query = {"nome": {"$regex": intent_data["nome"], "$options": "i"}}
             prodotti_trovati = list(prodotti_collection.find(query))
+            #qui sopra viene inviata una query per interrogare il database
             if prodotti_trovati:
                 context_data = "Informazioni sui prodotti trovati nel database:\n"
                 for p in prodotti_trovati:
                     context_data += f"- Nome: {p['nome']}, Prezzo: {p['prezzo_lordo']:.2f}€, Descrizione: {p.get('descrizione', 'N/D')}\n"
             else:
                 context_data = "Nessun prodotto trovato con quel nome nel database."
-
+        #interrogazione database con un altra query, non più alla ricerca  del nome, ma alla ricerca della categoria
         elif intenzione == "elenca_categoria" and "categoria" in intent_data:
             query = {"categoria": intent_data["categoria"]}
             prodotti_trovati = list(prodotti_collection.find(query))
             if prodotti_trovati:
                 context_data = f"Elenco dei prodotti nella categoria '{intent_data['categoria']}':\n"
-                for p in prodotti_trovati: # <-- Corretto l'errore di battitura qui (era 'produtos_trovati')
+                for p in prodotti_trovati:
                     context_data += f"- {p['nome']} a {p['prezzo_lordo']:.2f}€\n"
             else:
                 context_data = f"Nessun prodotto trovato nella categoria '{intent_data['categoria']}'."
-
+        #se i prodotti sono stati trovati, viene passato  tutto a gemini, in modo da dare una rispsota il più mirata possibile
         if context_data:
             final_prompt = f"""
             Sei un assistente virtuale amichevole di un e-commerce.
@@ -493,70 +458,97 @@ def handle_chat():
         print(f"❌ ERRORE durante la chiamata a Gemini o elaborazione: {e}")
         return jsonify({"error": "Errore nella comunicazione con l'assistente AI"}), 500
 
-# =======================================================
-# === NUOVA ROTTA PER OTTENERE LO STORICO DEGLI ORDINI ===
-# =======================================================
 @app.route('/api/ordini/<user_id>', methods=['GET'])
 def get_ordini_utente(user_id):
+    #recupera ordini dell'utente e li riordina in modo che i più recenti si vedano prima
     try:
-        # Cerca tutti gli scontrini che corrispondono allo user_id
-        ordini_cursor = scontrini_collection.find({"user_id": user_id}).sort("data_creazione", -1) # Ordina dal più recente
-        
+        ordini_cursor = scontrini_collection.find({"user_id": user_id}).sort("data_creazione", -1)
         ordini_list = []
         for ordine in ordini_cursor:
-            # Converti l'ObjectId in una stringa per renderlo compatibile con JSON
             ordine['_id'] = str(ordine['_id'])
             ordini_list.append(ordine)
-            
         return jsonify(ordini_list)
 
     except Exception as e:
         print(f"❌ Errore nel recupero degli ordini per l'utente {user_id}: {e}")
         return jsonify({"errore": "Errore interno del server durante il recupero degli ordini."}), 500
 
-# --- 5. POPOLAMENTO INIZIALE ---
+# --- GESTIONE FAVICON ---
+# --- Gestione della richiesta per il favicon in formato .ico ---
 
+# Definisce una rotta (un URL specifico) per '/favicon.ico'. 
+# I browser richiedono automaticamente questo file per mostrare l'icona nella scheda.
+@app.route('/favicon.ico')
+def favicon():
+    # Inizia un blocco "try" per gestire eventuali errori, come un file mancante.
+    try:
+        # Tenta di trovare e inviare il file 'favicon.ico' dalla cartella dei file statici (di solito chiamata 'static').
+        return app.send_static_file('favicon.ico')
+    # Se si verifica un errore nel blocco "try" (es. il file non esiste)...
+    except:
+        # ...restituisci una risposta vuota ('') con il codice di stato HTTP 204.
+        # 204 significa "No Content" (Nessun Contenuto), che dice al browser che la richiesta è andata
+        # a buon fine ma non c'è nulla da inviare, evitando così un errore 404 nei log del server.
+        return '', 204
+
+# --- Gestione della richiesta per il favicon in formato .png (un'alternativa comune) ---
+
+# Definisce una rotta per '/favicon.png', per supportare anche il formato PNG, più moderno.
+@app.route('/favicon.png')
+def favicon_png():
+    # Inizia un blocco "try" per la gestione degli errori, come per il file .ico.
+    try:
+        # Tenta di trovare e inviare il file 'favicon.png' dalla cartella dei file statici.
+        return app.send_static_file('favicon.png')
+    # Se il file 'favicon.png' non viene trovato...
+    except:
+        # ...restituisci anche in questo caso una risposta vuota con il codice di stato 204 "No Content".
+        return '', 204
+
+# --- POPOLAMENTO INIZIALE ---
 def popola_db_mongo():
+    #cancellazione  prodotti presenti per ricreare ambiente di test
     if prodotti_collection.count_documents({}) > 0:
         prodotti_collection.delete_many({})
         print("🧹 Collezione 'prodotti' pulita.")
 
     if prodotti_collection.count_documents({}) == 0:
         print("Collezione 'prodotti' vuota. Popolamento in corso...")
+        #inserimento prodotti (esempi   )
         prodotti_da_inserire = [
             # Alimentari (IVA 4%)
-            { "nome": "Pane Casereccio", "prezzo_lordo": 2.41, "categoria": "Alimentari", "immagine_url": "pane.jpg", "descrizione": "Immagina il profumo del pane appena sfornato che riempie la cucina. Questo è il nostro pane casereccio: una crosta dorata e croccante che scrocchia al primo morso, rivelando una mollica morbida e alveolata. Fatto come una volta, con lievito madre e una lenta lievitazione che gli conferisce un sapore rustico e inconfondibile." },
-            { "nome": "Latte Intero 1L", "prezzo_lordo": 1.59, "categoria": "Alimentari", "immagine_url": "latte.jpg", "descrizione": "Questo non è un latte qualsiasi. È il latte fresco e cremoso che sa di buono, proveniente da stalle selezionate dove il benessere animale è al primo posto. Il suo gusto pieno e genuino lo rende perfetto per iniziare la giornata, per un cappuccino vellutato o come ingrediente segreto per rendere le tue torte ancora più soffici." },
-            { "nome": "Uova Fresche (6)", "prezzo_lordo": 2.95, "categoria": "Alimentari", "immagine_url": "uova.jpg", "descrizione": "Direttamente da galline felici, libere di razzolare a terra, queste uova hanno un tuorlo di un colore giallo intenso che parla da solo. Sono l'ingrediente che fa la differenza in ogni ricetta: perfette per una carbonara cremosa, un uovo all'occhio di bue dal sapore ricco o una frittata alta e saporita." },
-            { "nome": "Pasta di Semola 500g", "prezzo_lordo": 0.89, "categoria": "Alimentari", "immagine_url": "pasta.jpg", "descrizione": "La vera pasta della domenica, ma perfetta per ogni giorno. Prodotta con il miglior grano duro italiano e trafilata al bronzo, la sua superficie ruvida e porosa è fatta apposta per catturare ogni goccia di sugo. Sentirai la differenza sotto i denti: una consistenza sempre al dente." },
-            { "nome": "Mela Rossa (1kg)", "prezzo_lordo": 1.80, "categoria": "Alimentari", "immagine_url": "mela.jpg", "descrizione": "Croccanti, succose e piene di sapore. Queste mele rosse sono lo spuntino sano per eccellenza. Ogni morso è un'esplosione di freschezza, con un equilibrio perfetto tra dolcezza e una punta di acidità, che ti ricarica di energia e benessere." },
-            { "nome": "Olio Extra Vergine (1L)", "prezzo_lordo": 6.99, "categoria": "Alimentari", "immagine_url": "olio.jpg", "descrizione": "Un filo di quest'olio a crudo è pura poesia. Ottenuto dalla prima spremitura a freddo di olive selezionate, ha un carattere deciso, con note fruttate e un piacevole pizzicore finale che ne certifica la qualità. È l'anima della cucina mediterranea." },
-            { "nome": "Caffè Macinato (250g)", "prezzo_lordo": 3.49, "categoria": "Alimentari", "immagine_url": "caffe.jpg", "descrizione": "Apri la confezione e lasciati avvolgere da un aroma intenso che sa di casa e di risvegli felici. Questa miscela 100% Arabica, macinata alla perfezione per la moka, regala un caffè equilibrato e vellutato, senza retrogusto amaro. La piccola coccola quotidiana che ti dà la carica." },
-            { "nome": "Marmellata di Fragole", "prezzo_lordo": 2.15, "categoria": "Alimentari", "immagine_url": "marmellata.jpg", "descrizione": "Dimentica le marmellate industriali. Questa è fatta con il 70% di fragole fresche, come quella che preparava la nonna. Dentro ci trovi i pezzi di frutta, un profumo inebriante e un sapore autentico e non troppo dolce. Deliziosa sul pane tostato o con lo yogurt." },
-            { "nome": "Tonno in Olio (3 scatolette)", "prezzo_lordo": 4.50, "categoria": "Alimentari", "immagine_url": "tonno.jpg", "descrizione": "Filetti di tonno compatti e saporiti, così teneri che si sciolgono in bocca. Non è il solito tonno sbriciolato, ma pezzi interi conservati in un ottimo olio d'oliva che ne esalta il gusto. Perfetto per un'insalata ricca o un sugo veloce." },
-            { "nome": "Acqua Minerale Naturale (6x1.5L)", "prezzo_lordo": 1.95, "categoria": "Alimentari", "immagine_url": "acqua.jpg", "descrizione": "Leggera e pura, quest'acqua oligominerale è la tua alleata di benessere quotidiano. Sgorga da una fonte protetta, mantenendo intatte tutte le sue preziose proprietà. È l'idratazione perfetta per tutta la famiglia, con un gusto delicato e un residuo fisso basso." },
+            {"nome": "Pane Casereccio", "prezzo_lordo": 2.41, "categoria": "Alimentari", "immagine_url": "pane.jpg", "descrizione": "Immagina il profumo del pane appena sfornato che riempie la cucina. Questo è il nostro pane casereccio: una crosta dorata e croccante che scrocchia al primo morso, rivelando una mollica morbida e alveolata. Fatto come una volta, con lievito madre e una lenta lievitazione che gli conferisce un sapore rustico e inconfondibile."},
+            {"nome": "Latte Intero 1L", "prezzo_lordo": 1.59, "categoria": "Alimentari", "immagine_url": "latte.jpg", "descrizione": "Questo non è un latte qualsiasi. È il latte fresco e cremoso che sa di buono, proveniente da stalle selezionate dove il benessere animale è al primo posto. Il suo gusto pieno e genuino lo rende perfetto per iniziare la giornata, per un cappuccino vellutato o come ingrediente segreto per rendere le tue torte ancora più soffici."},
+            {"nome": "Uova Fresche (6)", "prezzo_lordo": 2.95, "categoria": "Alimentari", "immagine_url": "uova.jpg", "descrizione": "Direttamente da galline felici, libere di razzolare a terra, queste uova hanno un tuorlo di un colore giallo intenso che parla da solo. Sono l'ingrediente che fa la differenza in ogni ricetta: perfette per una carbonara cremosa, un uovo all'occhio di bue dal sapore ricco o una frittata alta e saporita."},
+            {"nome": "Pasta di Semola 500g", "prezzo_lordo": 0.89, "categoria": "Alimentari", "immagine_url": "pasta.jpg", "descrizione": "La vera pasta della domenica, ma perfetta per ogni giorno. Prodotta con il miglior grano duro italiano e trafilata al bronzo, la sua superficie ruvida e porosa è fatta apposta per catturare ogni goccia di sugo. Sentirai la differenza sotto i denti: una consistenza sempre al dente."},
+            {"nome": "Mela Rossa (1kg)", "prezzo_lordo": 1.80, "categoria": "Alimentari", "immagine_url": "mela.jpg", "descrizione": "Croccanti, succose e piene di sapore. Queste mele rosse sono lo spuntino sano per eccellenza. Ogni morso è un'esplosione di freschezza, con un equilibrio perfetto tra dolcezza e una punta di acidità, che ti ricarica di energia e benessere."},
+            {"nome": "Olio Extra Vergine (1L)", "prezzo_lordo": 6.99, "categoria": "Alimentari", "immagine_url": "olio.jpg", "descrizione": "Un filo di quest'olio a crudo è pura poesia. Ottenuto dalla prima spremitura a freddo di olive selezionate, ha un carattere deciso, con note fruttate e un piacevole pizzicore finale che ne certifica la qualità. È l'anima della cucina mediterranea."},
+            {"nome": "Caffè Macinato (250g)", "prezzo_lordo": 3.49, "categoria": "Alimentari", "immagine_url": "caffe.jpg", "descrizione": "Apri la confezione e lasciati avvolgere da un aroma intenso che sa di casa e di risvegli felici. Questa miscela 100% Arabica, macinata alla perfezione per la moka, regala un caffè equilibrato e vellutato, senza retrogusto amaro. La piccola coccola quotidiana che ti dà la carica."},
+            {"nome": "Marmellata di Fragole", "prezzo_lordo": 2.15, "categoria": "Alimentari", "immagine_url": "marmellata.jpg", "descrizione": "Dimentica le marmellate industriali. Questa è fatta con il 70% di fragole fresche, come quella che preparava la nonna. Dentro ci trovi i pezzi di frutta, un profumo inebriante e un sapore autentico e non troppo dolce. Deliziosa sul pane tostato o con lo yogurt."},
+            {"nome": "Tonno in Olio (3 scatolette)", "prezzo_lordo": 4.50, "categoria": "Alimentari", "immagine_url": "tonno.jpg", "descrizione": "Filetti di tonno compatti e saporiti, così teneri che si sciolgono in bocca. Non è il solito tonno sbriciolato, ma pezzi interi conservati in un ottimo olio d'oliva che ne esalta il gusto. Perfetto per un'insalata ricca o un sugo veloce."},
+            {"nome": "Acqua Minerale Naturale (6x1.5L)", "prezzo_lordo": 1.95, "categoria": "Alimentari", "immagine_url": "acqua.jpg", "descrizione": "Leggera e pura, quest'acqua oligominerale è la tua alleata di benessere quotidiano. Sgorga da una fonte protetta, mantenendo intatte tutte le sue preziose proprietà. È l'idratazione perfetta per tutta la famiglia, con un gusto delicato e un residuo fisso basso."},
 
             # Medicinali (IVA 10%)
-            { "nome": "Oki (antidol.)", "prezzo_lordo": 4.99, "categoria": "Medicinali", "immagine_url": "oki.jpg", "descrizione": "Un alleato fidato e veloce contro mal di testa, dolori muscolari o mestruali. La sua formula agisce rapidamente per darti sollievo proprio quando ne hai più bisogno. Le pratiche bustine monodose sono perfette da tenere in borsa o in ufficio." },
-            { "nome": "Termometro Digitale", "prezzo_lordo": 8.90, "categoria": "Medicinali", "immagine_url": "termometro.jpg", "descrizione": "L'essenziale che non può mancare in nessuna casa. Facilissimo da usare, ti dà una lettura della temperatura precisa e affidabile in pochi secondi, senza l'ansia del vecchio mercurio. Il display digitale è chiaro e di facile lettura." },
-            { "nome": "Cerotti Assortiti (20 pz)", "prezzo_lordo": 3.20, "categoria": "Medicinali", "immagine_url": "cerotti.jpg", "descrizione": "Perché i piccoli incidenti capitano, questo kit è la soluzione a portata di mano. Contiene cerotti di ogni forma e misura, perfetti per le dita o le ginocchia. Sono ipoallergenici e traspiranti, per proteggere la ferita e far respirare la pelle." },
-            { "nome": "Spray Nasale", "prezzo_lordo": 5.50, "categoria": "Medicinali", "immagine_url": "spray.jpg", "descrizione": "Quando il raffreddore ti chiude il naso, questo spray è una vera boccata d'aria fresca. La sua soluzione ipertonica aiuta a liberare le vie respiratorie in modo naturale e delicato, offrendo un sollievo immediato dalla congestione per tornare a respirare liberamente." },
-            { "nome": "Integratore Vitamina C (30 compresse)", "prezzo_lordo": 9.20, "categoria": "Medicinali", "immagine_url": "vitamina_c.jpg", "descrizione": "Il tuo scudo quotidiano per rafforzare le difese immunitarie. Con 1000mg di Vitamina C per compressa, è un potente supporto per il tuo organismo, specialmente durante i cambi di stagione o nei periodi di maggiore stress. Ti aiuta a combattere stanchezza e affaticamento." },
-            { "nome": "Garze Sterili (10x10, 10 pz)", "prezzo_lordo": 2.50, "categoria": "Medicinali", "immagine_url": "garze.jpg", "descrizione": "Un prodotto fondamentale per la medicazione di piccole ferite. Morbide, super assorbenti e confezionate singolarmente per garantire la massima igiene e sterilità. Realizzate in tessuto che non si attacca alla ferita, rendendo il cambio più semplice." },
-            { "nome": "Bende Elastiche", "prezzo_lordo": 4.10, "categoria": "Medicinali", "immagine_url": "benda.jpg", "descrizione": "Che si tratti di una leggera distorsione o di un affaticamento muscolare, questa benda offre il giusto supporto senza bloccare i movimenti. Il suo tessuto elastico e traspirante si adatta perfettamente al corpo, fornendo una compressione confortevole e stabile." },
-            { "nome": "Sciroppo Tosse Secca", "prezzo_lordo": 6.80, "categoria": "Medicinali", "immagine_url": "sciroppo.jpg", "descrizione": "Quella tosse secca e fastidiosa che non ti dà tregua, soprattutto di notte, ha trovato il suo nemico. Questo sciroppo agisce creando un film protettivo che calma l'irritazione della gola, dando un sollievo immediato e duraturo." },
+            {"nome": "Oki (antidol.)", "prezzo_lordo": 4.99, "categoria": "Medicinali", "immagine_url": "oki.jpg", "descrizione": "Un alleato fidato e veloce contro mal di testa, dolori muscolari o mestruali. La sua formula agisce rapidamente per darti sollievo proprio quando ne hai più bisogno. Le pratiche bustine monodose sono perfette da tenere in borsa o in ufficio."},
+            {"nome": "Termometro Digitale", "prezzo_lordo": 8.90, "categoria": "Medicinali", "immagine_url": "termometro.jpg", "descrizione": "L'essenziale che non può mancare in nessuna casa. Facilissimo da usare, ti dà una lettura della temperatura precisa e affidabile in pochi secondi, senza l'ansia del vecchio mercurio. Il display digitale è chiaro e di facile lettura."},
+            {"nome": "Cerotti Assortiti (20 pz)", "prezzo_lordo": 3.20, "categoria": "Medicinali", "immagine_url": "cerotti.jpg", "descrizione": "Perché i piccoli incidenti capitano, questo kit è la soluzione a portata di mano. Contiene cerotti di ogni forma e misura, perfetti per le dita o le ginocchia. Sono ipoallergenici e traspiranti, per proteggere la ferita e far respirare la pelle."},
+            {"nome": "Spray Nasale", "prezzo_lordo": 5.50, "categoria": "Medicinali", "immagine_url": "spray.jpg", "descrizione": "Quando il raffreddore ti chiude il naso, questo spray è una vera boccata d'aria fresca. La sua soluzione ipertonica aiuta a liberare le vie respiratorie in modo naturale e delicato, offrendo un sollievo immediato dalla congestione per tornare a respirare liberamente."},
+            {"nome": "Integratore Vitamina C (30 compresse)", "prezzo_lordo": 9.20, "categoria": "Medicinali", "immagine_url": "vitamina_c.jpg", "descrizione": "Il tuo scudo quotidiano per rafforzare le difese immunitarie. Con 1000mg di Vitamina C per compressa, è un potente supporto per il tuo organismo, specialmente durante i cambi di stagione o nei periodi di maggiore stress. Ti aiuta a combattere stanchezza e affaticamento."},
+            {"nome": "Garze Sterili (10x10, 10 pz)", "prezzo_lordo": 2.50, "categoria": "Medicinali", "immagine_url": "garze.jpg", "descrizione": "Un prodotto fondamentale per la medicazione di piccole ferite. Morbide, super assorbenti e confezionate singolarmente per garantire la massima igiene e sterilità. Realizzate in tessuto che non si attacca alla ferita, rendendo il cambio più semplice."},
+            {"nome": "Bende Elastiche", "prezzo_lordo": 4.10, "categoria": "Medicinali", "immagine_url": "benda.jpg", "descrizione": "Che si tratti di una leggera distorsione o di un affaticamento muscolare, questa benda offre il giusto supporto senza bloccare i movimenti. Il suo tessuto elastico e traspirante si adatta perfettamente al corpo, fornendo una compressione confortevole e stabile."},
+            {"nome": "Sciroppo Tosse Secca", "prezzo_lordo": 6.80, "categoria": "Medicinali", "immagine_url": "sciroppo.jpg", "descrizione": "Quella tosse secca e fastidiosa che non ti dà tregua, soprattutto di notte, ha trovato il suo nemico. Questo sciroppo agisce creando un film protettivo che calma l'irritazione della gola, dando un sollievo immediato e duraturo."},
 
             # Altro (IVA 22%)
-            { "nome": "Agenda 2024", "prezzo_lordo": 15.50, "categoria": "Altro", "immagine_url": "agenda.png", "descrizione": "Più di una semplice agenda, è il tuo assistente personale. Con una copertina elegante e pagine di alta qualità su cui la penna scorre che è un piacere, ti aiuta a tenere sotto controllo ogni impegno. La sua struttura intelligente ti permette di organizzare il tempo con stile." },
-            { "nome": "Shampoo Neutro", "prezzo_lordo": 3.80, "categoria": "Altro", "immagine_url": "shampoo.jpg", "descrizione": "Uno shampoo delicato che si prende cura dei tuoi capelli giorno dopo giorno. La sua formula bilanciata è adatta a tutta la famiglia e a lavaggi frequenti, perché pulisce a fondo senza aggredire la cute. Lascia i capelli morbidi, leggeri e luminosi." },
-            { "nome": "Quaderno a Righe", "prezzo_lordo": 1.99, "categoria": "Altro", "immagine_url": "quaderno.jpg", "descrizione": "La pagina a righe di un nuovo progetto. Che tu sia uno studente o un professionista, questo quaderno è il compagno ideale per i tuoi appunti. La carta spessa evita che l'inchiostro trapassi e la copertina robusta protegge le tue idee." },
-            { "nome": "Penna Gel Nera", "prezzo_lordo": 1.20, "categoria": "Altro", "immagine_url": "penna.jpg", "descrizione": "Scopri il piacere di una scrittura fluida e senza interruzioni. L'inchiostro gel scivola sul foglio con facilità, lasciando un tratto nero, intenso e preciso che si asciuga in un attimo. L'impugnatura comoda la rende perfetta per lunghe sessioni di scrittura." },
-            { "nome": "Detersivo Lavatrice (1.5L)", "prezzo_lordo": 7.30, "categoria": "Altro", "immagine_url": "detersivo.jpg", "descrizione": "Un pulito impeccabile e un profumo di bucato che sa di fresco e di casa. Questo detersivo concentrato è potente contro le macchie più ostinate, anche a basse temperature, rispettando i colori e i tessuti. Meno prodotto, più pulito." },
-            { "nome": "Lampadina LED E27", "prezzo_lordo": 4.50, "categoria": "Altro", "immagine_url": "lampadina.jpg", "descrizione": "Illumina i tuoi spazi con una luce calda e accogliente, simile a quella di una volta, ma con un consumo energetico irrisorio. Dura anni, facendoti risparmiare sulla bolletta e riducendo gli sprechi. La scelta intelligente per la tua casa." },
-            { "nome": "Carta Igienica (4 rotoli)", "prezzo_lordo": 2.55, "categoria": "Altro", "immagine_url": "carta_igienica.jpg", "descrizione": "Una piccola coccola quotidiana a cui non si può rinunciare. Realizzata con tre veli di pura cellulosa, offre una morbidezza eccezionale unita a una sorprendente resistenza. La garanzia di un comfort superiore per te e la tua famiglia." },
-            { "nome": "Set Cacciaviti (6 pezzi)", "prezzo_lordo": 18.90, "categoria": "Altro", "immagine_url": "cacciaviti.jpg", "descrizione": "Il kit indispensabile per ogni piccolo lavoro di casa. Le impugnature ergonomiche ti offrono una presa salda e comoda, mentre le punte magnetiche sono un aiuto geniale per non perdere mai le viti. Un set robusto e affidabile che durerà nel tempo." },
-            { "nome": "Mouse Ottico USB", "prezzo_lordo": 9.99, "categoria": "Altro", "immagine_url": "mouse.jpg", "descrizione": "Preciso, affidabile e pronto all'uso. Basta collegare il cavo USB e sei subito operativo. Il suo sensore ottico garantisce un controllo del cursore fluido e reattivo, mentre il design ambidestro lo rende comodo per ore di navigazione senza sforzo." },
-            { "nome": "Batterie Alcaline AA (4 pz)", "prezzo_lordo": 3.90, "categoria": "Altro", "immagine_url": "batterie.jpg", "descrizione": "L'energia affidabile per tutti i tuoi dispositivi. Dai telecomandi ai giocattoli dei bambini, queste batterie alcaline garantiscono una lunga durata e una performance costante. La tranquillità di sapere che funzioneranno sempre quando ne avrai bisogno." }
+            {"nome": "Agenda 2024", "prezzo_lordo": 15.50, "categoria": "Altro", "immagine_url": "agenda.png", "descrizione": "Più di una semplice agenda, è il tuo assistente personale. Con una copertina elegante e pagine di alta qualità su cui la penna scorre che è un piacere, ti aiuta a tenere sotto controllo ogni impegno. La sua struttura intelligente ti permette di organizzare il tempo con stile."},
+            {"nome": "Shampoo Neutro", "prezzo_lordo": 3.80, "categoria": "Altro", "immagine_url": "shampoo.jpg", "descrizione": "Uno shampoo delicato che si prende cura dei tuoi capelli giorno dopo giorno. La sua formula bilanciata è adatta a tutta la famiglia e a lavaggi frequenti, perché pulisce a fondo senza aggredire la cute. Lascia i capelli morbidi, leggeri e luminosi."},
+            {"nome": "Quaderno a Righe", "prezzo_lordo": 1.99, "categoria": "Altro", "immagine_url": "quaderno.jpg", "descrizione": "La pagina a righe di un nuovo progetto. Che tu sia uno studente o un professionista, questo quaderno è il compagno ideale per i tuoi appunti. La carta spessa evita che l'inchiostro trapassi e la copertina robusta protegge le tue idee."},
+            {"nome": "Penna Gel Nera", "prezzo_lordo": 1.20, "categoria": "Altro", "immagine_url": "penna.jpg", "descrizione": "Scopri il piacere di una scrittura fluida e senza interruzioni. L'inchiostro gel scivola sul foglio con facilità, lasciando un tratto nero, intenso e preciso che si asciuga in un attimo. L'impugnatura comoda la rende perfetta per lunghe sessioni di scrittura."},
+            {"nome": "Detersivo Lavatrice (1.5L)", "prezzo_lordo": 7.30, "categoria": "Altro", "immagine_url": "detersivo.jpg", "descrizione": "Un pulito impeccabile e un profumo di bucato che sa di fresco e di casa. Questo detersivo concentrato è potente contro le macchie più ostinate, anche a basse temperature, rispettando i colori e i tessuti. Meno prodotto, più pulito."},
+            {"nome": "Lampadina LED E27", "prezzo_lordo": 4.50, "categoria": "Altro", "immagine_url": "lampadina.jpg", "descrizione": "Illumina i tuoi spazi con una luce calda e accogliente, simile a quella di una volta, ma con un consumo energetico irrisorio. Dura anni, facendoti risparmiare sulla bolletta e riducendo gli sprechi. La scelta intelligente per la tua casa."},
+            {"nome": "Carta Igienica (4 rotoli)", "prezzo_lordo": 2.55, "categoria": "Altro", "immagine_url": "carta_igienica.jpg", "descrizione": "Una piccola coccola quotidiana a cui non si può rinunciare. Realizzata con tre veli di pura cellulosa, offre una morbidezza eccezionale unita a una sorprendente resistenza. La garanzia di un comfort superiore per te e la tua famiglia."},
+            {"nome": "Set Cacciaviti (6 pezzi)", "prezzo_lordo": 18.90, "categoria": "Altro", "immagine_url": "cacciaviti.jpg", "descrizione": "Il kit indispensabile per ogni piccolo lavoro di casa. Le impugnature ergonomiche ti offrono una presa salda e comoda, mentre le punte magnetiche sono un aiuto geniale per non perdere mai le viti. Un set robusto e affidabile che durerà nel tempo."},
+            {"nome": "Mouse Ottico USB", "prezzo_lordo": 9.99, "categoria": "Altro", "immagine_url": "mouse.jpg", "descrizione": "Preciso, affidabile e pronto all'uso. Basta collegare il cavo USB e sei subito operativo. Il suo sensore ottico garantisce un controllo del cursore fluido e reattivo, mentre il design ambidestro lo rende comodo per ore di navigazione senza sforzo."},
+            {"nome": "Batterie Alcaline AA (4 pz)", "prezzo_lordo": 3.90, "categoria": "Altro", "immagine_url": "batterie.jpg", "descrizione": "L'energia affidabile per tutti i tuoi dispositivi. Dai telecomandi ai giocattoli dei bambini, queste batterie alcaline garantiscono una lunga durata e una performance costante. La tranquillità di sapere che funzioneranno sempre quando ne avrai bisogno."}
         ]
         prodotti_collection.insert_many(prodotti_da_inserire)
         print("✅ Database MongoDB popolato con prodotti di esempio (lista estesa).")
@@ -574,7 +566,7 @@ def popola_utenti_mongo():
         print("✅ Database MongoDB popolato con utenti di esempio.")
     else:
         print("Database MongoDB ('utenti') già popolato.")
-
+#avvio utenti
 if __name__ == '__main__':
     popola_db_mongo()
     popola_utenti_mongo()
